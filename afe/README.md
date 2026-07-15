@@ -1,0 +1,40 @@
+# `afe` — dataset sourcing
+
+Implements the approved dataset plan: a **benchmark** evaluation suite and a
+disjoint **meta-training corpus**. (The plan sketched this under a `data/`
+package; `data/` is gitignored for the dataset cache, so the code lives here in
+`afe/` and downloaded data goes to the repo-root `data/cache/`.)
+
+## Layout
+- `registry.py` — declarative `BENCHMARK` (22 datasets) + `CORPUS_SUITES`. Datasets
+  addressed by source *name/slug*, not numeric id; OpenML versions pinned where >1 active.
+- `download.py` — `load(spec)` fetches + caches one dataset to `data/cache/*.parquet`,
+  returns `(frame, meta)`. Lazy imports, so metadata-only use needs no heavy deps.
+- `manifests.py` — `python -m afe.manifests` (re)builds `afe/manifests/{benchmark,corpus}.json`,
+  removing every benchmark dataset from the corpus (hard disjointness rule).
+
+## Setup
+```bash
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+```
+
+## Verify
+```bash
+pytest tests/ -q                       # disjointness + coverage (offline, no network)
+python -m scripts.smoke_download       # fetch every benchmark dataset, print metadata
+python -m scripts.parity_check         # raw-feature LightGBM baseline (OpenFE Table-3 sanity)
+python -m afe.manifests                # rebuild the frozen split
+```
+
+## Fetch status
+- **Auto (no auth), verified:** california-housing, breast-cancer-wisconsin, nomao,
+  vehicle-sensit, jannis, telecom-churn, electricity, bank-marketing, german-credit,
+  heart-disease, concrete-strength, superconductivity, qsar-biodegradation. Names confirmed
+  via OpenML metadata for covertype, diabetes-130us (same OpenML path, high confidence).
+- **Needs Kaggle auth** (`~/.kaggle/kaggle.json` + accept each competition's rules once):
+  ieee-cis-fraud, bnp-paribas-claims, home-credit-default, house-prices. Set an explicit
+  `target` in the registry (already done for house-prices).
+- **Manual CSV drop** into `data/cache/raw/<key>/` (from `IIIS-Li-Group/OpenFE_reproduce`):
+  microsoft-mslr, medical, broken-machine. These 3 have no clean canonical source; the
+  reproduce mirror also guarantees split parity for the OpenFE-comparable subset.

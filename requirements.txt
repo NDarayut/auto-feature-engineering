@@ -1,0 +1,16 @@
+# Core data handling
+pandas>=2.0
+numpy>=1.24
+pyarrow>=14.0            # parquet cache
+
+# Dataset sources
+scikit-learn>=1.3        # sklearn built-ins + fetch_openml
+openml>=0.14             # OpenML suites (CC18 / CTR23 / AMLB) + datasets
+ucimlrepo>=0.0.7         # UCI datasets by name
+kaggle>=1.6              # Kaggle competition downloads (needs ~/.kaggle/kaggle.json)
+
+# Baseline model for the OpenFE parity check
+lightgbm>=4.0
+
+# Tests
+pytest>=7.4
