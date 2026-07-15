@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+*.egg
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment / secrets
+.env
+.env.*
+
+# Data & model artifacts
+data/
+datasets/
+*.csv
+*.parquet
+*.pkl
+*.pickle
+*.feather
+*.h5
+*.npy
+*.npz
+
+# Experiment outputs
+outputs/
+results/
+runs/
+mlruns/
+wandb/
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Claude Code local settings
+.claude/settings.local.json
