@@ -38,8 +38,8 @@ Assemble a benchmark suite spanning:
   competition winner writeups) so generated features can be sanity-checked
   against known-useful engineered features.
 
-For each dataset, fix and record: target definition, train/test split
-(or CV protocol), and any dataset-specific preprocessing decided once and
+For each dataset, fix and record: target definition, a single fixed-seed
+train/test split, and any dataset-specific preprocessing decided once and
 reused across all methods.
 
 ## 3. Feature Generation Protocol
@@ -110,16 +110,18 @@ For each (dataset, method, model) combination, report:
 A method is preferred only if it improves performance-per-compute-budget
 over the baseline, not merely if it adds volume.
 
-### 5.3 Statistical rigor
-- Evaluate every (dataset, method, model) combination across **5
-  independent random seeds** (data split/shuffle/init seed) or **k-fold
-  cross-validation (k=5)** — pick one protocol per dataset based on its
-  size (CV for small datasets, seed-repeats for large ones where CV is
-  too slow) and apply it consistently to all methods on that dataset.
-- Report mean ± standard deviation, and run a paired significance test
-  (e.g. paired t-test or Wilcoxon signed-rank across seeds/folds) between
-  each AutoFE method and the baseline, and between top-performing methods,
-  rather than declaring a winner from means alone.
+### 5.3 Split protocol
+- Evaluate every (dataset, method, model) combination on a **single
+  fixed-seed train/test split** per dataset (80/20, class-stratified for
+  classification), applied identically to the baseline and every AutoFE
+  method on that dataset — not k-fold CV or seed-repeats.
+- This is a deliberate tradeoff: one point estimate per (dataset, method,
+  model) combination instead of a distribution across folds/seeds, in
+  exchange for a much lower compute and memory budget (each dataset is
+  processed once, end to end, then its memory is freed before the next).
+  It means results are not accompanied by a standard deviation or a paired
+  significance test — treat deltas as directional signal, not statistically
+  validated differences.
 
 ## 6. Aggregation & Reporting
 
@@ -127,8 +129,9 @@ over the baseline, not merely if it adds volume.
   regression), then by **sector**, then aggregated overall — never
   aggregate classification and regression metrics together.
 - For each split, show: baseline vs. each method's performance delta,
-  feature yield, feature efficiency, and compute cost, plus significance
-  markers.
+  feature yield, feature efficiency, and compute cost, from the single
+  fixed-seed split (§5.3) — no significance markers, since there is no
+  distribution across folds/seeds to test.
 - Explicitly surface sector-specific winners vs. a generalist winner (best
   average rank across all sectors) — these can legitimately be different
   methods, and the report should say so rather than picking one "best"

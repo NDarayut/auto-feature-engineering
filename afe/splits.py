@@ -1,9 +1,11 @@
 """Freeze the evaluation split *protocol* for every benchmark dataset.
 
-draft_plan.md Sec. 2 requires that, for each dataset, the train/test split (or
-CV protocol) is "fixed and recorded ... decided once and reused across all
-methods." Sec. 5.3 picks the protocol by dataset size: 5-fold CV for datasets
-small enough for it to be cheap, 5-seed-repeat holdout otherwise.
+draft_plan.md Sec. 2 requires that, for each dataset, the train/test split is
+"fixed and recorded ... decided once and reused across all methods." Sec. 5.3
+uses a single fixed-seed 80/20 train/test split per dataset -- one point
+estimate per (dataset, method, model) combination, not a distribution across
+folds/seeds (see draft_plan.md Sec. 5.3 for the rationale: this trades
+statistical rigor for much lower compute and memory cost).
 
 We freeze the *recipe* (protocol name + seed + params), not materialized row
 indices: regenerating indices from a fixed seed is a cheap, pure function, and
@@ -29,15 +31,13 @@ import pandas as pd
 
 from .registry import BENCHMARK, DatasetSpec
 
-CV_FOLDS = 5
-N_SEED_REPEATS = 5
 HOLDOUT_TEST_SIZE = 0.2
 SPLIT_SEED_BASE = 20260101
 
 MANIFEST_DIR = Path(__file__).resolve().parent / "manifests"
 SPLITS_MANIFEST = MANIFEST_DIR / "splits.json"
 
-Protocol = Literal["cv5", "seed_repeat5"]
+Protocol = Literal["holdout"]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -45,9 +45,7 @@ class SplitPlan:
     key: str
     protocol: Protocol
     seed: int
-    n_folds: int | None  # set for cv5, else None
-    n_repeats: int | None  # set for seed_repeat5, else None
-    test_size: float | None  # set for seed_repeat5, else None
+    test_size: float
     stratify: bool
 
 
@@ -62,19 +60,13 @@ def _seed_for(key: str) -> int:
 
 
 def protocol_for(spec: DatasetSpec) -> Protocol:
-    return "cv5" if spec.scale == "small" else "seed_repeat5"
+    return "holdout"
 
 
 def plan_for(spec: DatasetSpec) -> SplitPlan:
-    protocol = protocol_for(spec)
-    stratify = spec.task != "regression"
-    if protocol == "cv5":
-        return SplitPlan(spec.key, protocol, _seed_for(spec.key),
-                          n_folds=CV_FOLDS, n_repeats=None, test_size=None,
-                          stratify=stratify)
-    return SplitPlan(spec.key, protocol, _seed_for(spec.key),
-                      n_folds=None, n_repeats=N_SEED_REPEATS,
-                      test_size=HOLDOUT_TEST_SIZE, stratify=stratify)
+    return SplitPlan(spec.key, protocol_for(spec), _seed_for(spec.key),
+                      test_size=HOLDOUT_TEST_SIZE,
+                      stratify=spec.task != "regression")
 
 
 def build_manifest() -> dict[str, dict]:
@@ -103,26 +95,6 @@ def load_manifest() -> dict[str, SplitPlan]:
 # --------------------------------------------------------------------------- #
 # Deterministic index generation
 # --------------------------------------------------------------------------- #
-def _fold_ids(n: int, k: int, seed: int) -> np.ndarray:
-    """Unstratified fold assignment: shuffle row order, cut into k chunks."""
-    rng = np.random.RandomState(seed)
-    order = rng.permutation(n)
-    fold_of_row = np.empty(n, dtype=int)
-    fold_of_row[order] = np.arange(n) % k
-    return fold_of_row
-
-
-def _stratified_fold_ids(y: np.ndarray, k: int, seed: int) -> np.ndarray:
-    """Per-class shuffle + round-robin fold cut, then merged back by row."""
-    rng = np.random.RandomState(seed)
-    fold_of_row = np.empty(len(y), dtype=int)
-    for cls in np.unique(y):
-        idx = np.flatnonzero(y == cls)
-        order = rng.permutation(idx)
-        fold_of_row[order] = np.arange(len(order)) % k
-    return fold_of_row
-
-
 def _holdout_test_mask(n: int, test_size: float, seed: int) -> np.ndarray:
     rng = np.random.RandomState(seed)
     order = rng.permutation(n)
@@ -147,7 +119,8 @@ def _stratified_holdout_test_mask(y: np.ndarray, test_size: float,
 def iter_split_indices(
     spec: DatasetSpec, n: int, y: pd.Series | np.ndarray | None = None,
 ) -> Iterator[tuple[str, np.ndarray, np.ndarray]]:
-    """Yield ``(fold_id, train_idx, test_idx)`` for ``spec``'s frozen plan.
+    """Yield a single ``(fold_id, train_idx, test_idx)`` for ``spec``'s frozen
+    plan: one fixed-seed 80/20 train/test split, not CV or seed-repeats.
 
     ``n`` is the row count of the dataset being split. ``y`` is required (and
     used for class-stratified splitting) whenever ``spec.task != "regression"``.
@@ -158,22 +131,10 @@ def iter_split_indices(
     y_arr = np.asarray(y) if y is not None else None
     all_idx = np.arange(n)
 
-    if plan.protocol == "cv5":
-        fold_of_row = (_stratified_fold_ids(y_arr, plan.n_folds, plan.seed)
-                       if plan.stratify
-                       else _fold_ids(n, plan.n_folds, plan.seed))
-        for f in range(plan.n_folds):
-            test_idx = all_idx[fold_of_row == f]
-            train_idx = all_idx[fold_of_row != f]
-            yield f"cv{f}", train_idx, test_idx
-        return
-
-    for r in range(plan.n_repeats):
-        seed_r = plan.seed + r
-        test_mask = (_stratified_holdout_test_mask(y_arr, plan.test_size, seed_r)
-                    if plan.stratify
-                    else _holdout_test_mask(n, plan.test_size, seed_r))
-        yield f"seed{r}", all_idx[~test_mask], all_idx[test_mask]
+    test_mask = (_stratified_holdout_test_mask(y_arr, plan.test_size, plan.seed)
+                if plan.stratify
+                else _holdout_test_mask(n, plan.test_size, plan.seed))
+    yield "split0", all_idx[~test_mask], all_idx[test_mask]
 
 
 if __name__ == "__main__":

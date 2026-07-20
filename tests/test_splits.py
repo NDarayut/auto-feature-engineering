@@ -1,5 +1,5 @@
 """Split-protocol guards: draft_plan Sec. 2 (fixed, reused split) and Sec. 5.3
-(CV for small datasets, seed-repeat holdout otherwise) -- no network needed."""
+(single fixed-seed 80/20 train/test split per dataset) -- no network needed."""
 
 import numpy as np
 
@@ -7,10 +7,9 @@ from afe.registry import BENCHMARK
 from afe.splits import build_manifest, iter_split_indices, plan_for, protocol_for
 
 
-def test_protocol_matches_scale():
+def test_protocol_is_holdout_for_all_scales():
     for spec in BENCHMARK:
-        expected = "cv5" if spec.scale == "small" else "seed_repeat5"
-        assert protocol_for(spec) == expected
+        assert protocol_for(spec) == "holdout"
 
 
 def test_splits_manifest_covers_registry():
@@ -43,21 +42,19 @@ def test_no_train_test_overlap():
         assert set(train_idx).isdisjoint(test_idx)
 
 
-def test_cv_folds_partition_all_rows():
+def test_single_split_covers_all_rows():
     spec = next(s for s in BENCHMARK if s.scale == "small")
     n = 251  # not evenly divisible by 5, exercises remainder handling
     y = _rng_y(n, 2)
-    test_sets = [set(test_idx) for _fid, _tr, test_idx in iter_split_indices(spec, n, y=y)]
-    assert len(test_sets) == plan_for(spec).n_folds
-    union = set().union(*test_sets)
-    assert union == set(range(n))
-    for i in range(len(test_sets)):
-        for j in range(i + 1, len(test_sets)):
-            assert test_sets[i].isdisjoint(test_sets[j])
+    folds = list(iter_split_indices(spec, n, y=y))
+    assert len(folds) == 1
+    _fid, train_idx, test_idx = folds[0]
+    assert set(train_idx) | set(test_idx) == set(range(n))
+    assert set(train_idx).isdisjoint(test_idx)
 
 
-def test_stratified_folds_preserve_class_balance():
-    spec = next(s for s in BENCHMARK if s.scale == "small" and s.task != "regression")
+def test_stratified_split_preserves_class_balance():
+    spec = next(s for s in BENCHMARK if s.task != "regression")
     n = 1000
     rng = np.random.RandomState(1)
     y = (rng.rand(n) < 0.1).astype(int)  # imbalanced 10/90 split
@@ -67,8 +64,8 @@ def test_stratified_folds_preserve_class_balance():
         assert abs(test_rate - global_rate) < 0.05
 
 
-def test_seed_repeat_holdout_respects_test_size():
-    spec = next(s for s in BENCHMARK if s.scale != "small")
+def test_holdout_respects_test_size():
+    spec = BENCHMARK[0]
     n = 1000
     y = _rng_y(n, 2) if spec.task != "regression" else None
     plan = plan_for(spec)

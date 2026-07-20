@@ -12,6 +12,12 @@ package; `data/` is gitignored for the dataset cache, so the code lives here in
   returns `(frame, meta)`. Lazy imports, so metadata-only use needs no heavy deps.
 - `manifests.py` — `python -m afe.manifests` (re)builds `afe/manifests/{benchmark,corpus}.json`,
   removing every benchmark dataset from the corpus (hard disjointness rule).
+- `splits.py` / `encoders.py` / `eval_data.py` — frozen per-dataset single
+  fixed-seed train/test split, per-model-family encoders, and the `iter_folds()`
+  fold-iteration contract.
+- `methods.py` / `models.py` / `benchmark.py` — AutoFE method adapters (baseline, OpenFE,
+  Featuretools, Autofeat), the 3-model panel, and the budget-limited benchmark runner.
+  Full flow: **`docs/benchmark_guide.md`**.
 
 ## Setup
 ```bash

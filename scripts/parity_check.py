@@ -4,9 +4,10 @@ Validates the full split -> encode -> fold-iterate -> train -> score path end
 to end before any AutoFE: numbers should land near OpenFE Table-3 "Base"
 territory (regression R^2 high on California Housing, classification AUC well
 above 0.5 on Nomao). This is a sanity gate, not a full benchmark run (default
-hyperparameters, no compute-budget enforcement, no model panel) -- but it now
-exercises the real per-dataset split protocol (draft_plan Sec. 5.3) and
-reports mean +/- std across folds/seeds rather than a single split's score.
+hyperparameters, no compute-budget enforcement, no model panel) -- but it
+exercises the real per-dataset split protocol (draft_plan Sec. 5.3): a single
+fixed-seed 80/20 train/test split, so each dataset reports one score, not a
+mean +/- std across folds/seeds.
 
     python -m scripts.parity_check
 """
