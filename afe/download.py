@@ -133,9 +133,13 @@ def _fetch_kaggle_competition(spec: DatasetSpec) -> tuple[pd.DataFrame, str]:
              "-p", str(dest)],
             check=True,
         )
-        for zpath in dest.glob("*.zip"):
-            with zipfile.ZipFile(zpath) as zf:
-                zf.extractall(dest)
+        # Some competitions nest the CSVs in per-file zips (e.g. train.csv.zip);
+        # keep extracting until no zips remain.
+        while list(dest.glob("*.zip")):
+            for zpath in dest.glob("*.zip"):
+                with zipfile.ZipFile(zpath) as zf:
+                    zf.extractall(dest)
+                zpath.unlink()
     train = next((p for p in dest.glob("*.csv") if "train" in p.name.lower()),
                  None) or next(dest.glob("*.csv"))
     frame = pd.read_csv(train)
@@ -148,10 +152,16 @@ def _fetch_kaggle_competition(spec: DatasetSpec) -> tuple[pd.DataFrame, str]:
 
 
 def _fetch_openfe_reproduce(spec: DatasetSpec) -> tuple[pd.DataFrame, str]:
-    raise NotImplementedError(
-        f"{spec.key}: fetch from the IIIS-Li-Group/OpenFE_reproduce mirror is "
-        "not wired up yet -- drop the CSV into data/cache/raw/"
-        f"{spec.key}/ manually for now.")
+    dest = RAW_DIR / spec.key
+    train = next((p for p in dest.glob("*.csv") if "train" in p.name.lower()), None)
+    if train is None:
+        raise FileNotFoundError(
+            f"{spec.key}: no CSV containing 'train' found in {dest} -- fetch it "
+            "from the IIIS-Li-Group/OpenFE_reproduce mirror's linked data archive "
+            "and drop it there manually.")
+    frame = pd.read_csv(train)
+    target = spec.target or "target"
+    return frame, target
 
 
 _FETCHERS = {

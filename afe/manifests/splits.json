@@ -1,0 +1,200 @@
+{
+  "california-housing": {
+    "key": "california-housing",
+    "protocol": "seed_repeat5",
+    "seed": 1404229301,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": false
+  },
+  "microsoft-mslr": {
+    "key": "microsoft-mslr",
+    "protocol": "seed_repeat5",
+    "seed": 1310495099,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": false
+  },
+  "medical": {
+    "key": "medical",
+    "protocol": "seed_repeat5",
+    "seed": 2512577259,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": false
+  },
+  "diabetes-130us": {
+    "key": "diabetes-130us",
+    "protocol": "seed_repeat5",
+    "seed": 4014519381,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": true
+  },
+  "nomao": {
+    "key": "nomao",
+    "protocol": "seed_repeat5",
+    "seed": 1412570865,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": true
+  },
+  "vehicle-sensit": {
+    "key": "vehicle-sensit",
+    "protocol": "seed_repeat5",
+    "seed": 2249365099,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": true
+  },
+  "broken-machine": {
+    "key": "broken-machine",
+    "protocol": "seed_repeat5",
+    "seed": 708277204,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": true
+  },
+  "telecom-churn": {
+    "key": "telecom-churn",
+    "protocol": "seed_repeat5",
+    "seed": 2072324265,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": true
+  },
+  "jannis": {
+    "key": "jannis",
+    "protocol": "seed_repeat5",
+    "seed": 457440672,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": true
+  },
+  "covertype": {
+    "key": "covertype",
+    "protocol": "seed_repeat5",
+    "seed": 3739779320,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": true
+  },
+  "ieee-cis-fraud": {
+    "key": "ieee-cis-fraud",
+    "protocol": "seed_repeat5",
+    "seed": 1860635206,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": true
+  },
+  "bnp-paribas-claims": {
+    "key": "bnp-paribas-claims",
+    "protocol": "seed_repeat5",
+    "seed": 572898603,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": true
+  },
+  "home-credit-default": {
+    "key": "home-credit-default",
+    "protocol": "seed_repeat5",
+    "seed": 628279824,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": true
+  },
+  "german-credit": {
+    "key": "german-credit",
+    "protocol": "cv5",
+    "seed": 927956366,
+    "n_folds": 5,
+    "n_repeats": null,
+    "test_size": null,
+    "stratify": true
+  },
+  "heart-disease": {
+    "key": "heart-disease",
+    "protocol": "cv5",
+    "seed": 351273054,
+    "n_folds": 5,
+    "n_repeats": null,
+    "test_size": null,
+    "stratify": true
+  },
+  "breast-cancer-wisconsin": {
+    "key": "breast-cancer-wisconsin",
+    "protocol": "cv5",
+    "seed": 1879740109,
+    "n_folds": 5,
+    "n_repeats": null,
+    "test_size": null,
+    "stratify": true
+  },
+  "superconductivity": {
+    "key": "superconductivity",
+    "protocol": "seed_repeat5",
+    "seed": 4060209673,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": false
+  },
+  "concrete-strength": {
+    "key": "concrete-strength",
+    "protocol": "cv5",
+    "seed": 1273691222,
+    "n_folds": 5,
+    "n_repeats": null,
+    "test_size": null,
+    "stratify": false
+  },
+  "qsar-biodegradation": {
+    "key": "qsar-biodegradation",
+    "protocol": "cv5",
+    "seed": 3104666138,
+    "n_folds": 5,
+    "n_repeats": null,
+    "test_size": null,
+    "stratify": true
+  },
+  "house-prices": {
+    "key": "house-prices",
+    "protocol": "seed_repeat5",
+    "seed": 3996526843,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": false
+  },
+  "bank-marketing": {
+    "key": "bank-marketing",
+    "protocol": "seed_repeat5",
+    "seed": 761611504,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": true
+  },
+  "electricity": {
+    "key": "electricity",
+    "protocol": "seed_repeat5",
+    "seed": 2947933833,
+    "n_folds": null,
+    "n_repeats": 5,
+    "test_size": 0.2,
+    "stratify": true
+  }
+}
