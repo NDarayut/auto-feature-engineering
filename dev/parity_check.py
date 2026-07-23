@@ -19,8 +19,8 @@ import warnings
 import numpy as np
 from sklearn.metrics import r2_score, roc_auc_score
 
-from afe.eval_data import iter_folds
-from afe.registry import BENCHMARK
+from afe.benchmark.eval_data import iter_folds
+from afe.benchmark.registry import BENCHMARK
 
 warnings.filterwarnings("ignore")
 CHECK = ["california-housing", "nomao", "concrete-strength"]

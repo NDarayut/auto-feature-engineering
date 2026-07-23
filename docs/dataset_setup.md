@@ -5,7 +5,7 @@ fresh machine. Follow top to bottom; the whole thing (minus the large Kaggle
 downloads) takes a few minutes.
 
 - Code: `afe/` package.
-- Frozen split (version-controlled): `afe/manifests/{benchmark,corpus}.json`.
+- Frozen split (version-controlled): `afe/benchmark/manifests/{benchmark,corpus}.json`.
 - Downloaded data (gitignored, machine-local): `data/cache/`.
 
 See `algorithm_plan.md` / `draft_plan.md` for *why* these datasets; this doc is the *how*.
@@ -35,10 +35,12 @@ openml, ucimlrepo, kaggle, lightgbm (parity baseline), pytest.
 ## 3. Repo layout
 ```
 afe/
-  registry.py     # 22 benchmark DatasetSpecs + CORPUS_SUITES (source of truth)
-  download.py     # load(spec) -> (DataFrame, meta); caches to data/cache/*.parquet
-  manifests.py    # builds afe/manifests/{benchmark,corpus}.json (disjoint split)
-  manifests/      # the frozen split (committed)
+  meta/online.py    # MFOpenFE -- the public entrypoint, unrelated to dataset sourcing
+  benchmark/
+    registry.py     # 22 benchmark DatasetSpecs + CORPUS_SUITES (source of truth)
+    download.py     # load(spec) -> (DataFrame, meta); caches to data/cache/*.parquet
+    manifests.py    # builds afe/benchmark/manifests/{benchmark,corpus}.json (disjoint split)
+    manifests/      # the frozen split (committed)
 scripts/            # production entrypoints (run_benchmark.py, run_stage0.py, ...)
 dev/
   smoke_download.py  # fetch every benchmark dataset, print a metadata row
@@ -88,9 +90,9 @@ guarantees split parity for the OpenFE-comparable subset.
 
 ## 6. Build the frozen split (benchmark vs. corpus)
 ```bash
-python -m afe.manifests
+python -m afe.benchmark.manifests
 ```
-Writes `afe/manifests/benchmark.json` (22 datasets) and `corpus.json` (~100 OpenML
+Writes `afe/benchmark/manifests/benchmark.json` (22 datasets) and `corpus.json` (~100 OpenML
 datasets: OpenML-CC18 classification + OpenML-CTR23 regression, capped at
 `CORPUS_MAX_DATASETS=100`). The builder **removes every benchmark dataset from the
 corpus** (hard disjointness rule, `algorithm_plan.md` §3) — e.g. it drops CC18's
@@ -143,7 +145,7 @@ is correct and you're ready to build AutoFE on top.
 | electricity | clf | energy | med | openml | electricity (v1) | |
 
 ## 9. Adding a dataset
-Append a `DatasetSpec(...)` to `BENCHMARK` in `afe/registry.py`. Required: `key`,
+Append a `DatasetSpec(...)` to `BENCHMARK` in `afe/benchmark/registry.py`. Required: `key`,
 `display`, `task`, `sector`, `scale`, `source`, `fetch_key`. Set `target` when the
 source doesn't name it (always for Kaggle). Set `openml_version` if OpenML lists >1
 active version. Add `aliases` for any other names by which it might appear in a corpus
@@ -162,4 +164,4 @@ suite (so the disjointness filter catches it). Then re-run §6 and §7.
   `pip install -e .` once), then use `python -m scripts.<name>` / `python -m dev.<name>`
   / `python -m afe.<name>`.
 - **Reproducibility** — OpenML versions are pinned and the split is frozen in
-  `afe/manifests/`; keep those committed and everyone stays in sync.
+  `afe/benchmark/manifests/`; keep those committed and everyone stays in sync.

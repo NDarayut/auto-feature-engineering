@@ -14,8 +14,8 @@ from __future__ import annotations
 import sys
 import traceback
 
-from afe.download import load
-from afe.registry import BENCHMARK
+from afe.benchmark.download import load
+from afe.benchmark.registry import BENCHMARK
 
 HEADER = f"{'key':24s} {'task':13s} {'rows':>8s} {'feat':>5s} {'cat':>4s} {'sector':20s} license"
 

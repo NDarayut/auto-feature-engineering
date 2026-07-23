@@ -101,9 +101,10 @@ class _IsolatedCwd:
 class OpenFEMethod:
     name = "openfe"
 
-    def __init__(self, n_new_features: int = 10, n_jobs: int = 1):
+    def __init__(self, n_new_features: int = 10, n_jobs: int = 1, verbose: bool = False):
         self.n_new_features = n_new_features
         self.n_jobs = n_jobs
+        self.verbose = verbose
         self._features = None
         self._X_train = None
 
@@ -115,7 +116,7 @@ class OpenFEMethod:
         with _IsolatedCwd():
             ofe = OpenFE()
             self._features = ofe.fit(data=X_train, label=y_train, task=task_str,
-                                      n_jobs=self.n_jobs, seed=0, verbose=False)
+                                      n_jobs=self.n_jobs, seed=0, verbose=self.verbose)
             selected = self._features[: self.n_new_features]
             X_train_new, _ = transform(X_train, X_train, selected, n_jobs=self.n_jobs)
         self._selected = selected
@@ -136,8 +137,9 @@ class FeaturetoolsMethod:
 
     name = "featuretools"
 
-    def __init__(self, max_depth: int = 1):
+    def __init__(self, max_depth: int = 1, verbose: bool = False):
         self.max_depth = max_depth
+        self.verbose = verbose
         self._feature_defs = None
 
     def _entityset(self, X: pd.DataFrame, name: str):
@@ -157,7 +159,7 @@ class FeaturetoolsMethod:
             entityset=es, target_dataframe_name="data",
             trans_primitives=["add_numeric", "subtract_numeric",
                                "multiply_numeric", "divide_numeric"],
-            max_depth=self.max_depth, n_jobs=1, verbose=False,
+            max_depth=self.max_depth, n_jobs=1, verbose=self.verbose,
         )
         self._feature_defs = feature_defs
         return fm.reset_index(drop=True)
@@ -173,15 +175,16 @@ class FeaturetoolsMethod:
 class AutofeatMethod:
     name = "autofeat"
 
-    def __init__(self, feateng_steps: int = 1):
+    def __init__(self, feateng_steps: int = 1, verbose: int = 0):
         self.feateng_steps = feateng_steps
+        self.verbose = verbose
         self._model = None
 
     def fit_transform(self, X_train, y_train, task):
         from autofeat import AutoFeatClassifier, AutoFeatRegressor
 
         cls = AutoFeatRegressor if task == "regression" else AutoFeatClassifier
-        self._model = cls(feateng_steps=self.feateng_steps, n_jobs=1, verbose=0)
+        self._model = cls(feateng_steps=self.feateng_steps, n_jobs=1, verbose=self.verbose)
         out = self._model.fit_transform(X_train, y_train)
         return self._to_frame(out, X_train.index)
 

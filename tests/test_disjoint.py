@@ -1,8 +1,8 @@
 """Disjointness + integrity guards for the dataset split (no network needed)."""
 
-import afe.manifests as manifests
-from afe.manifests import build_corpus_manifest
-from afe.registry import BENCHMARK, benchmark_names_for_exclusion
+import afe.benchmark.manifests as manifests
+from afe.benchmark.manifests import build_corpus_manifest
+from afe.benchmark.registry import BENCHMARK, benchmark_names_for_exclusion
 
 
 def test_benchmark_keys_unique():

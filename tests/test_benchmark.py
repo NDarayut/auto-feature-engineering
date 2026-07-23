@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import afe.benchmark as benchmark
-from afe.registry import BENCHMARK
+import afe.benchmark.benchmark as benchmark
+from afe.benchmark.registry import BENCHMARK
 
 _KEY = next(s.key for s in BENCHMARK if s.scale == "small" and s.task != "regression")
 

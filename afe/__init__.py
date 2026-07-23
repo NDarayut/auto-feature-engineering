@@ -1,31 +1,30 @@
-"""Dataset sourcing for the MF-OpenFE benchmark + meta-training corpus.
+"""MF-OpenFE: automatic feature engineering, meta-filtered.
 
-Common entrypoints are re-exported here for convenience::
+Public entrypoint::
 
-    from afe import iter_folds, run_benchmark, load, BENCHMARK
+    from afe import MFOpenFE
 
-Every submodule (``afe.download``, ``afe.eval_data``, ``afe.benchmark``, ...)
-remains directly importable too -- this is purely additive.
+    mfe = MFOpenFE(task="classification", progress=True)
+    X_train_fe = mfe.fit_transform(X_train, y_train)
+    X_test_fe = mfe.transform(X_test)
+
+Offline meta-model training utilities (``MetaModel``, ``train_meta_model``,
+``generate_labels``) are also re-exported for advanced/research use -- see
+``afe/meta/README.md``.
+
+The AutoFE benchmark/comparison harness (baseline vs. OpenFE vs. Featuretools
+vs. Autofeat vs. MF-OpenFE, plus the frozen dataset registry it runs against)
+lives in the separate ``afe.benchmark`` subpackage and is not part of this
+top-level surface -- see ``docs/benchmark_guide.md``.
 """
 
-from .benchmark import run_benchmark
-from .download import load
-from .eval_data import iter_folds
-from .registry import (
-    BENCHMARK,
-    CORPUS_MAX_DATASETS,
-    CORPUS_SUITES,
-    DatasetSpec,
-    benchmark_names_for_exclusion,
-)
+from __future__ import annotations
+
+from .meta import MetaModel, MFOpenFE, generate_labels, train_meta_model
 
 __all__ = [
-    "BENCHMARK",
-    "CORPUS_SUITES",
-    "CORPUS_MAX_DATASETS",
-    "DatasetSpec",
-    "benchmark_names_for_exclusion",
-    "iter_folds",
-    "load",
-    "run_benchmark",
+    "MetaModel",
+    "MFOpenFE",
+    "generate_labels",
+    "train_meta_model",
 ]

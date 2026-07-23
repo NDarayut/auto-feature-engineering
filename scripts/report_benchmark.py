@@ -17,7 +17,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-from afe.registry import BENCHMARK
+from afe.benchmark.registry import BENCHMARK
 
 _SECTOR = {s.key: s.sector for s in BENCHMARK}
 

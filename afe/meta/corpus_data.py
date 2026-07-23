@@ -21,7 +21,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-CORPUS_MANIFEST = Path(__file__).resolve().parent.parent / "manifests" / "corpus.json"
+CORPUS_MANIFEST = (Path(__file__).resolve().parent.parent / "benchmark"
+                    / "manifests" / "corpus.json")
 CACHE_DIR = (Path(__file__).resolve().parent.parent.parent / "data" / "cache"
              / "corpus")
 

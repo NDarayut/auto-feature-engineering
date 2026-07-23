@@ -1,41 +1,45 @@
-# `afe` — dataset sourcing
+# `afe` — the MF-OpenFE library
 
-Implements the approved dataset plan: a **benchmark** evaluation suite and a
-disjoint **meta-training corpus**. (The plan sketched this under a `data/`
-package; `data/` is gitignored for the dataset cache, so the code lives here in
-`afe/` and downloaded data goes to the repo-root `data/cache/`.)
+Top-level package. See the repo-root [`README.md`](../README.md) for the
+quickstart (`from afe import MFOpenFE`). This doc covers the package's own
+internal layout.
 
 ## Layout
-- `registry.py` — declarative `BENCHMARK` (22 datasets) + `CORPUS_SUITES`. Datasets
-  addressed by source *name/slug*, not numeric id; OpenML versions pinned where >1 active.
-- `download.py` — `load(spec)` fetches + caches one dataset to `data/cache/*.parquet`,
-  returns `(frame, meta)`. Lazy imports, so metadata-only use needs no heavy deps.
-- `manifests.py` — `python -m afe.manifests` (re)builds `afe/manifests/{benchmark,corpus}.json`,
-  removing every benchmark dataset from the corpus (hard disjointness rule).
-- `splits.py` / `encoders.py` / `eval_data.py` — frozen per-dataset single
-  fixed-seed train/test split, per-model-family encoders, and the `iter_folds()`
-  fold-iteration contract.
-- `methods.py` / `models.py` / `benchmark.py` — AutoFE method adapters (baseline, OpenFE,
-  Featuretools, Autofeat), the 3-model panel, and the budget-limited benchmark runner.
-  Full flow: **`docs/benchmark_guide.md`**.
-- `meta/` — MF-OpenFE's offline meta-learning pipeline (`algorithm_plan.md`):
-  Stage 0 RL label generation (Double DQN over a Feature Transformation Graph)
-  → Stage 1 per-operator meta-model. Runs on the disjoint corpus, never at
-  online usage time. See **`afe/meta/README.md`**.
+- `methods.py` — AutoFE method adapters (baseline, OpenFE, Featuretools,
+  Autofeat) sharing a common `fit_transform`/`transform` contract, plus
+  `prep_for_generation()` (ordinal-encode categoricals + median-impute,
+  fit on train only). Used by both `afe.benchmark` (comparing all 4) and
+  `afe.meta.online.MFOpenFE` (data prep only).
+- `encoders.py` — `TreeEncoder`/`LinearEncoder`, per-model-family encoding
+  fit on the training fold only.
+- `progress.py` — `ProgressReporter`: stage markers + tqdm bars, used by
+  `MFOpenFE` (`progress=True`).
+- `meta/` — MF-OpenFE itself:
+  - **Online** (`online.py`) — `MFOpenFE`, the public per-dataset entrypoint
+    (algorithm_plan.md Stages 3-6): generate candidates with OpenFE's own
+    operator library, meta-filter, verify + select.
+  - **Offline** (`stage0.py`/`stage1.py`/`environment.py`/`ddqn.py`/
+    `operators.py`/`meta_features.py`) — the one-time training pipeline that
+    produces `models/meta_model.pkl`, the artifact `online.py` loads. See
+    **`afe/meta/README.md`**.
+- `benchmark/` — the comparison/research harness (frozen dataset registry,
+  download/cache, split protocol, per-fold encoding, the 3-model scoring
+  panel, and the budget-limited benchmark runner). Not needed to run
+  `MFOpenFE`; see **`docs/benchmark_guide.md`**.
 
 ## Setup
 ```bash
 python -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .                       # makes `afe`/`afe.meta` importable from anywhere
+pip install -e .                       # core: just enough to run MFOpenFE
+pip install -e ".[benchmark]"          # + the comparison harness's deps
 ```
 
 ## Verify
 ```bash
-pytest tests/ -q                       # disjointness + coverage (offline, no network)
+pytest tests/ -q                       # 51 tests, offline, no network
 python -m dev.smoke_download           # fetch every benchmark dataset, print metadata
 python -m dev.parity_check             # raw-feature LightGBM baseline (OpenFE Table-3 sanity)
-python -m afe.manifests                # rebuild the frozen split
+python -m afe.benchmark.manifests      # rebuild the frozen benchmark/corpus split
 ```
 
 ## Production vs. dev
@@ -44,7 +48,8 @@ python -m afe.manifests                # rebuild the frozen split
 - `dev/` — one-off smoke/sanity utilities (`smoke_download.py`, `parity_check.py`),
   not part of the production pipeline. See `dev/README.md`.
 
-## Fetch status
+## Benchmark dataset fetch status
+(Only relevant if you're running `afe.benchmark` — irrelevant to `MFOpenFE` itself.)
 - **Auto (no auth), verified:** california-housing, breast-cancer-wisconsin, nomao,
   vehicle-sensit, jannis, telecom-churn, electricity, bank-marketing, german-credit,
   heart-disease, concrete-strength, superconductivity, qsar-biodegradation. Names confirmed

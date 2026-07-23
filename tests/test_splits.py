@@ -3,8 +3,8 @@
 
 import numpy as np
 
-from afe.registry import BENCHMARK
-from afe.splits import build_manifest, iter_split_indices, plan_for, protocol_for
+from afe.benchmark.registry import BENCHMARK
+from afe.benchmark.splits import build_manifest, iter_split_indices, plan_for, protocol_for
 
 
 def test_protocol_is_holdout_for_all_scales():

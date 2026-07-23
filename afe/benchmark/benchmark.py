@@ -35,14 +35,14 @@ from queue import Empty as QueueEmpty
 from pathlib import Path
 from typing import Iterable, Iterator
 
+from ..encoders import _split_columns
+from ..methods import METHODS, prep_for_generation
 from .download import load
-from .encoders import _split_columns
-from .methods import METHODS, prep_for_generation
 from .models import MODEL_FAMILIES, fit_and_score, prepare_family_input
 from .registry import BENCHMARK
 from .splits import iter_split_indices, protocol_for
 
-RESULTS_DIR = Path(__file__).resolve().parent.parent / "results"
+RESULTS_DIR = Path(__file__).resolve().parent.parent.parent / "results"
 DEFAULT_BUDGET_SECONDS = 300
 
 _BY_KEY = {s.key: s for s in BENCHMARK}

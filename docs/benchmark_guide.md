@@ -37,24 +37,24 @@ Kaggle-sourced datasets (4 of 22) need `~/.kaggle/kaggle.json` and each
 competition's rules accepted once in-browser — see `docs/dataset_setup.md`
 for the full walkthrough; this doc assumes the datasets are already fetched.
 
-## 2. Dataset sourcing (`afe/registry.py`, `afe/download.py`)
+## 2. Dataset sourcing (`afe/benchmark/registry.py`, `afe/benchmark/download.py`)
 
-`afe/registry.py` declares `BENCHMARK`: 22 `DatasetSpec`s (key, task,
+`afe/benchmark/registry.py` declares `BENCHMARK`: 22 `DatasetSpec`s (key, task,
 sector, scale, source, target column, ...) spanning classification/
 regression/multiclass, 4+ sectors, and small/medium/large scale — the
 coverage grid `draft_plan.md` §2 requires. A disjoint `CORPUS_SUITES` (~100
 OpenML datasets) is the meta-training corpus for the project's own
 algorithm work; it's not touched by the benchmark harness.
 
-`afe/download.py`'s `load(spec)` fetches (or reads the cache) one dataset:
+`afe/benchmark/download.py`'s `load(spec)` fetches (or reads the cache) one dataset:
 a raw, unsplit, unencoded `(DataFrame, meta_dict)`. Cached at
 `data/cache/<key>.parquet`. Full details, including the 3 manual-CSV and 4
 Kaggle datasets: `docs/dataset_setup.md`.
 
-Frozen manifests (regenerate with `python -m afe.manifests`):
-`afe/manifests/benchmark.json`, `afe/manifests/corpus.json`.
+Frozen manifests (regenerate with `python -m afe.benchmark.manifests`):
+`afe/benchmark/manifests/benchmark.json`, `afe/benchmark/manifests/corpus.json`.
 
-## 3. Split protocol (`afe/splits.py`)
+## 3. Split protocol (`afe/benchmark/splits.py`)
 
 Per `draft_plan.md` §2/§5.3, every dataset gets **one fixed train/test
 split**, decided once and reused identically by every method: a single
@@ -65,7 +65,7 @@ statistical rigor for much lower compute and memory cost.
 
 Classification/multiclass splits are class-stratified; regression splits are
 plain random. The *recipe* (protocol, per-dataset seed, test size) is frozen
-to `afe/manifests/splits.json` via `python -m afe.splits` — not materialized
+to `afe/benchmark/manifests/splits.json` via `python -m afe.benchmark.splits` — not materialized
 row indices, since regenerating them from a fixed seed
 (`numpy.random.RandomState`, whose bit-stream is version-stable) is cheap
 and keeps the manifest metadata-sized. `iter_split_indices(spec, n, y)`
@@ -84,10 +84,10 @@ Two profiles, per `draft_plan.md` §4, each fit on the training fold only:
   `categorical_encoding="target"` swaps one-hot for target encoding (this
   profile's answer to §4's "one-hot or WoE" allowance).
 
-`afe/eval_data.py`'s `iter_folds(key, encoding="tree"|"linear")` ties
+`afe/benchmark/eval_data.py`'s `iter_folds(key, encoding="tree"|"linear")` ties
 `load()` + `splits` + `encoders` into ready-to-train folds — the contract
 any *non-AutoFE* consumer (e.g. a plain model comparison) can use directly.
-The benchmark harness (`afe/benchmark.py`) uses the lower-level pieces
+The benchmark harness (`afe/benchmark/benchmark.py`) uses the lower-level pieces
 directly instead, because it needs the *raw* fold to hand to AutoFE methods
 before any model-family encoding is applied (see §6).
 
@@ -112,7 +112,7 @@ regression) and produce sane, improving-over-baseline results for the
 linear/kNN families (trees are already close to raw-feature ceiling on this
 dataset, so smaller/no tree lift is expected, not a bug).
 
-## 6. The 3-model panel (`afe/models.py`)
+## 6. The 3-model panel (`afe/benchmark/models.py`)
 
 Per `draft_plan.md` §5.1: one boosted-tree model, one linear model, one
 non-tree/non-linear (distance-based) model.
@@ -129,7 +129,7 @@ handles NaN, not inf); linear/kNN additionally get median-imputed +
 standard-scaled. `fit_and_score()` reports R²+MAE (regression) or
 AUC/macro-AUC-OvR (classification).
 
-## 7. Running the benchmark (`afe/benchmark.py`, `scripts/run_benchmark.py`)
+## 7. Running the benchmark (`afe/benchmark/benchmark.py`, `scripts/run_benchmark.py`)
 
 ```bash
 python -m scripts.run_benchmark --datasets nomao concrete-strength \
@@ -149,7 +149,7 @@ concurrent. For each dataset, `run_dataset()` loads it once, computes its
 single split once, then loops over every requested method against that same
 split; once every method's rows for that dataset are written, the dataset's
 in-memory objects are explicitly dropped and garbage-collected before moving
-to the next dataset (`afe/benchmark.py`'s `run_dataset`). This is what bounds
+to the next dataset (`afe/benchmark/benchmark.py`'s `run_dataset`). This is what bounds
 peak memory to roughly one dataset's worth at a time, instead of scaling with
 a worker count — there is no `--workers` flag.
 
@@ -262,7 +262,7 @@ count instead of excluding them.
 python -m dev.parity_check
 ```
 
-Raw-feature LightGBM baseline via `afe.eval_data.iter_folds`, reporting each
+Raw-feature LightGBM baseline via `afe.benchmark.eval_data.iter_folds`, reporting each
 dataset's score on its single fixed-seed split — the fastest way to confirm
 the split/encode/fold-iteration path still works after a change, without
 running any AutoFE method.

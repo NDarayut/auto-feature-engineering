@@ -26,7 +26,7 @@ import pandas as pd
 from .registry import DatasetSpec
 
 # Downloaded data lives in the gitignored repo-root data/ dir, not in the package.
-CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "cache"
+CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "cache"
 RAW_DIR = CACHE_DIR / "raw"
 
 

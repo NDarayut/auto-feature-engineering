@@ -23,8 +23,8 @@ import argparse
 import warnings
 
 from afe.benchmark import DEFAULT_BUDGET_SECONDS, run_benchmark
-from afe.models import MODEL_FAMILIES
-from afe.registry import BENCHMARK
+from afe.benchmark.models import MODEL_FAMILIES
+from afe.benchmark.registry import BENCHMARK
 
 warnings.filterwarnings("ignore")
 

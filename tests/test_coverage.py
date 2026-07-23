@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 
-from afe.registry import BENCHMARK
+from afe.benchmark.registry import BENCHMARK
 
 
 def _sector_family(sector: str) -> str:

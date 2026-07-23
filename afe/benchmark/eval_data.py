@@ -24,8 +24,8 @@ from typing import Iterator, Literal
 import numpy as np
 import pandas as pd
 
+from ..encoders import ENCODER_PROFILES
 from .download import load
-from .encoders import ENCODER_PROFILES
 from .registry import BENCHMARK, DatasetSpec
 from .splits import iter_split_indices, protocol_for
 
