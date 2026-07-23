@@ -33,7 +33,7 @@ from afe.meta import MetaModel, train_meta_model
 fold = next(iter_folds("german-credit", encoding="tree"))
 
 # a trained MF-OpenFE meta-model (after running the offline pipeline below)
-model = MetaModel.load("results/meta/meta_model.pkl")
+model = MetaModel.load("models/meta_model.pkl")
 ```
 
 Fetching real data (OpenML/UCI/sklearn/Kaggle) needs network access and, for
@@ -50,7 +50,7 @@ dev/            one-off smoke/sanity utilities, not production — see dev/READM
 tests/          pytest suite, offline/no-network
 docs/           how-to guides (setup, running the benchmark, ctl script usage)
 research/       source papers backing algorithm_plan.md's design choices
-data/, results/ gitignored: dataset cache, benchmark/meta-model outputs
+data/, results/, models/  gitignored: dataset cache, run outputs/logs, trained models
 ```
 
 - **`afe/README.md`** — the library's own layout + verify/fetch-status reference.

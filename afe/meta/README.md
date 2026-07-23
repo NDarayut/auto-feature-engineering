@@ -22,7 +22,7 @@ Stage 0  (stage0.py)  ── per dataset: RL search → (sketch, operator, usefu
 Stage 1  (stage1.py)  ── per-operator RandomForest: sketch → P(useful)
         │  leave-datasets-out eval report
         ▼
-results/meta/meta_model.pkl   ← the online Stage-4 filter loads this
+models/meta_model.pkl   ← the online Stage-4 filter loads this
 ```
 
 ## Modules

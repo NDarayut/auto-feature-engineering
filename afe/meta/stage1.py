@@ -26,7 +26,7 @@ from .meta_features import SKETCH_DIM
 from .operators import OPERATOR_NAMES
 from .stage0 import DEFAULT_TUPLES_PATH
 
-MODEL_DIR = Path(__file__).resolve().parent.parent.parent / "results" / "meta"
+MODEL_DIR = Path(__file__).resolve().parent.parent.parent / "models"
 DEFAULT_MODEL_PATH = MODEL_DIR / "meta_model.pkl"
 MIN_PER_OPERATOR = 20  # below this, use the base rate instead of a fitted model
 
