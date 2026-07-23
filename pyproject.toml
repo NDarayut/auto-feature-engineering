@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auto-feature-engineering"
+version = "0.1.0"
+description = "MF-OpenFE: AutoFE benchmark suite + offline meta-learning pipeline"
+requires-python = ">=3.10"
+readme = "afe/README.md"
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "pyarrow>=14.0",
+    # >=1.3 for sklearn.preprocessing.TargetEncoder; <1.6 because openfe 0.0.12
+    # calls mean_squared_error(..., squared=False), removed in sklearn 1.6.
+    "scikit-learn>=1.3,<1.6",
+    "openml>=0.14",
+    "ucimlrepo>=0.0.7",
+    "kaggle>=1.6",
+    "lightgbm>=4.0",
+    "openfe>=0.0.12",
+    "featuretools>=1.31",
+    "autofeat>=2.1",
+    "matplotlib>=3.8",
+    "setuptools<81",  # featuretools/woodwork still import pkg_resources
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7.4"]
+
+[tool.setuptools.packages.find]
+include = ["afe", "afe.*"]
+
+[tool.setuptools.package-data]
+afe = ["manifests/*.json"]

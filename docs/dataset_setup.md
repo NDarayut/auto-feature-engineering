@@ -26,6 +26,7 @@ python -m venv .venv
 . .venv/bin/activate            # Windows: .venv\Scripts\activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
+python -m pip install -e .      # makes `afe`/`afe.meta` importable from anywhere
 ```
 
 `requirements.txt` pins: pandas, numpy, pyarrow (parquet cache), scikit-learn,
@@ -38,7 +39,8 @@ afe/
   download.py     # load(spec) -> (DataFrame, meta); caches to data/cache/*.parquet
   manifests.py    # builds afe/manifests/{benchmark,corpus}.json (disjoint split)
   manifests/      # the frozen split (committed)
-scripts/
+scripts/            # production entrypoints (run_benchmark.py, run_stage0.py, ...)
+dev/
   smoke_download.py  # fetch every benchmark dataset, print a metadata row
   parity_check.py    # raw-feature LightGBM baseline (OpenFE Table-3 sanity)
 tests/
@@ -67,10 +69,10 @@ IEEE-CIS Fraud, BNP Paribas Claims, Home Credit, House Prices come from Kaggle.
 ## 5. Fetch the data
 ```bash
 # All auto (no-auth) benchmark datasets + the Kaggle ones (if creds set):
-python -m scripts.smoke_download
+python -m dev.smoke_download
 
 # Or a subset by key:
-python -m scripts.smoke_download nomao california-housing german-credit
+python -m dev.smoke_download nomao california-housing german-credit
 ```
 Each dataset is fetched once and cached to `data/cache/<key>.parquet` (+ `.meta.json`).
 Re-runs read the cache. Delete a `.parquet`+`.meta.json` pair to force a refetch.
@@ -100,7 +102,7 @@ Commit the regenerated manifests so every machine trains/evaluates on the same s
 ## 7. Verify
 ```bash
 pytest tests/ -q                 # 9 tests, offline, ~instant
-python -m scripts.parity_check   # raw-feature LightGBM baseline
+python -m dev.parity_check       # raw-feature LightGBM baseline
 ```
 Expected `parity_check` output (single split, default params — sanity, not a full run):
 ```
@@ -156,7 +158,8 @@ suite (so the disjointness filter catches it). Then re-run §6 and §7.
   UCI entry has no tabular API; route the spec to `openml` instead (done for QSAR, and
   why covertype/diabetes-130us use OpenML).
 - **Kaggle `403`** — you haven't accepted that competition's rules (§4.3).
-- **`import afe` fails in a script** — run from the repo root with the venv active, or use
-  `python -m scripts.<name>` / `python -m afe.<name>`.
+- **`import afe` fails in a script** — run from the repo root with the venv active (or
+  `pip install -e .` once), then use `python -m scripts.<name>` / `python -m dev.<name>`
+  / `python -m afe.<name>`.
 - **Reproducibility** — OpenML versions are pinned and the split is frozen in
   `afe/manifests/`; keep those committed and everyone stays in sync.

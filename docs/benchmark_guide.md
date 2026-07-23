@@ -256,10 +256,10 @@ significance marker — a single split gives one estimate, not a distribution).
 A trailing "Failures / timeouts / crashes" table reports non-`ok` rows by
 count instead of excluding them.
 
-## 9. Sanity check (`scripts/parity_check.py`)
+## 9. Sanity check (`dev/parity_check.py`)
 
 ```bash
-python -m scripts.parity_check
+python -m dev.parity_check
 ```
 
 Raw-feature LightGBM baseline via `afe.eval_data.iter_folds`, reporting each
@@ -282,5 +282,5 @@ running any AutoFE method.
   results come in.
 - **Model hyperparameters are library defaults** (`LGBMRegressor()`,
   `Ridge()`, `KNeighborsRegressor(n_neighbors=10)`, ...) — no per-dataset
-  tuning, consistent with `scripts/parity_check.py`'s existing "sanity, not
+  tuning, consistent with `dev/parity_check.py`'s existing "sanity, not
   a tuned run" precedent.

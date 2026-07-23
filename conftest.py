@@ -1,2 +1,3 @@
 # Presence of this file puts the repo root on sys.path so tests can
-# `import data...` without an install step.
+# `import afe...` / `import scripts...` / `import dev...` without an install
+# step. Redundant with (and harmless alongside) `pip install -e .`.

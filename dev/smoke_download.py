@@ -5,8 +5,8 @@ obvious. Kaggle datasets need ``~/.kaggle/kaggle.json`` + accepted rules;
 openfe_reproduce datasets need a manual CSV drop (see download.py).
 
 Usage:
-    python -m scripts.smoke_download            # all benchmark datasets
-    python -m scripts.smoke_download nomao german-credit   # a subset by key
+    python -m dev.smoke_download            # all benchmark datasets
+    python -m dev.smoke_download nomao german-credit   # a subset by key
 """
 
 from __future__ import annotations

@@ -18,20 +18,31 @@ package; `data/` is gitignored for the dataset cache, so the code lives here in
 - `methods.py` / `models.py` / `benchmark.py` — AutoFE method adapters (baseline, OpenFE,
   Featuretools, Autofeat), the 3-model panel, and the budget-limited benchmark runner.
   Full flow: **`docs/benchmark_guide.md`**.
+- `meta/` — MF-OpenFE's offline meta-learning pipeline (`algorithm_plan.md`):
+  Stage 0 RL label generation (Double DQN over a Feature Transformation Graph)
+  → Stage 1 per-operator meta-model. Runs on the disjoint corpus, never at
+  online usage time. See **`afe/meta/README.md`**.
 
 ## Setup
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
+pip install -e .                       # makes `afe`/`afe.meta` importable from anywhere
 ```
 
 ## Verify
 ```bash
 pytest tests/ -q                       # disjointness + coverage (offline, no network)
-python -m scripts.smoke_download       # fetch every benchmark dataset, print metadata
-python -m scripts.parity_check         # raw-feature LightGBM baseline (OpenFE Table-3 sanity)
+python -m dev.smoke_download           # fetch every benchmark dataset, print metadata
+python -m dev.parity_check             # raw-feature LightGBM baseline (OpenFE Table-3 sanity)
 python -m afe.manifests                # rebuild the frozen split
 ```
+
+## Production vs. dev
+- `scripts/` — production entrypoints (`run_benchmark.py`, `report_benchmark.py`,
+  `run_stage0.py`, `train_meta_model.py`, `benchmark_ctl.sh`). See `scripts/README.md`.
+- `dev/` — one-off smoke/sanity utilities (`smoke_download.py`, `parity_check.py`),
+  not part of the production pipeline. See `dev/README.md`.
 
 ## Fetch status
 - **Auto (no auth), verified:** california-housing, breast-cancer-wisconsin, nomao,

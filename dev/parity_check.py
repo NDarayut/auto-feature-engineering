@@ -9,7 +9,7 @@ exercises the real per-dataset split protocol (draft_plan Sec. 5.3): a single
 fixed-seed 80/20 train/test split, so each dataset reports one score, not a
 mean +/- std across folds/seeds.
 
-    python -m scripts.parity_check
+    python -m dev.parity_check
 """
 
 from __future__ import annotations
