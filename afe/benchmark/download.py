@@ -21,6 +21,7 @@ import subprocess
 import zipfile
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from .registry import DatasetSpec
@@ -140,9 +141,28 @@ def _fetch_kaggle_competition(spec: DatasetSpec) -> tuple[pd.DataFrame, str]:
                 with zipfile.ZipFile(zpath) as zf:
                     zf.extractall(dest)
                 zpath.unlink()
-    train = next((p for p in dest.glob("*.csv") if "train" in p.name.lower()),
-                 None) or next(dest.glob("*.csv"))
-    frame = pd.read_csv(train)
+    train_csvs = sorted(p for p in dest.glob("*.csv") if "train" in p.name.lower())
+    if not train_csvs:
+        train_csvs = [next(dest.glob("*.csv"))]
+    # Multi-file competitions (e.g. IEEE-CIS: train_transaction + train_identity)
+    # split one logical table across files, joined on a shared id column. The
+    # file holding the target column must be the merge base so a left-join
+    # never drops labeled rows for lack of a match in a side file.
+    tables = [pd.read_csv(p) for p in train_csvs]
+    base_idx = next(
+        (i for i, t in enumerate(tables) if spec.target and spec.target in t.columns),
+        0,
+    )
+    frame = tables[base_idx]
+    for i, other in enumerate(tables):
+        if i == base_idx:
+            continue
+        common = [c for c in frame.columns if c in other.columns]
+        if not common:
+            raise ValueError(
+                f"{spec.key}: {train_csvs[base_idx].name} and {train_csvs[i].name} "
+                "share no columns to join on -- can't merge multi-file train set.")
+        frame = frame.merge(other, on=common, how="left")
     target = spec.target
     if target is None or target not in frame.columns:
         raise ValueError(
@@ -152,16 +172,36 @@ def _fetch_kaggle_competition(spec: DatasetSpec) -> tuple[pd.DataFrame, str]:
 
 
 def _fetch_openfe_reproduce(spec: DatasetSpec) -> tuple[pd.DataFrame, str]:
+    """Load one of the 3 datasets with no clean canonical source (docs §5a).
+
+    ``ZhangTP1996/OpenFE_reproduce`` ships these as RTDL-style ``.npy`` dumps
+    (``N_{train,val,test}.npy`` numeric, optional ``C_*.npy`` categorical,
+    ``y_*.npy`` target) inside its linked ``data.zip``, not CSVs. We
+    concatenate all 3 source splits into one frame: ``afe.benchmark.splits``
+    freezes its own fixed train/test split later, so the source split isn't
+    preserved here.
+    """
     dest = RAW_DIR / spec.key
-    train = next((p for p in dest.glob("*.csv") if "train" in p.name.lower()), None)
-    if train is None:
+    if not (dest / "N_train.npy").exists():
         raise FileNotFoundError(
-            f"{spec.key}: no CSV containing 'train' found in {dest} -- fetch it "
-            "from the IIIS-Li-Group/OpenFE_reproduce mirror's linked data archive "
-            "and drop it there manually.")
-    frame = pd.read_csv(train)
-    target = spec.target or "target"
-    return frame, target
+            f"{spec.key}: no {dest}/N_train.npy -- fetch data.zip from the "
+            "ZhangTP1996/OpenFE_reproduce mirror (see docs/dataset_setup.md) "
+            f"and drop its data/{spec.fetch_key}/ folder at {dest}.")
+
+    frames = []
+    for split in ("train", "val", "test"):
+        cols = {}
+        num = np.load(dest / f"N_{split}.npy")
+        cols.update({f"f{i}": num[:, i] for i in range(num.shape[1])})
+        cat_path = dest / f"C_{split}.npy"
+        if cat_path.exists():
+            cat = np.load(cat_path, allow_pickle=True)
+            cols.update({f"c{i}": cat[:, i] for i in range(cat.shape[1])})
+        target_col = spec.target or "target"
+        cols[target_col] = np.load(dest / f"y_{split}.npy").reshape(-1)
+        frames.append(pd.DataFrame(cols))
+    frame = pd.concat(frames, axis=0, ignore_index=True)
+    return frame, target_col
 
 
 _FETCHERS = {

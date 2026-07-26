@@ -80,13 +80,21 @@ Each dataset is fetched once and cached to `data/cache/<key>.parquet` (+ `.meta.
 Re-runs read the cache. Delete a `.parquet`+`.meta.json` pair to force a refetch.
 
 ### 5a. Three datasets need a manual drop
-`microsoft-mslr`, `medical`, `broken-machine` have no clean canonical source. Get them
-from the OpenFE authors' mirror **`IIIS-Li-Group/OpenFE_reproduce`** and drop the CSV at:
+`microsoft-mslr`, `medical`, `broken-machine` have no clean canonical source. They ship
+as RTDL-style `.npy` dumps in a `data.zip` linked from **`ZhangTP1996/OpenFE_reproduce`**
+(the mirror the main OpenFE repo's README points to under "Data Download" -> Part 2 --
+not `IIIS-Li-Group/OpenFE_reproduce`, which doesn't host the data). Download it, unzip,
+and drop each dataset's folder at:
 ```
-data/cache/raw/<key>/<something>train<something>.csv
+data/cache/raw/<key>/            # <key> = microsoft-mslr | medical | broken-machine
+  N_train.npy  N_val.npy  N_test.npy   # numeric features (required)
+  C_train.npy  C_val.npy  C_test.npy   # categorical features (optional)
+  y_train.npy  y_val.npy  y_test.npy   # target (required)
 ```
-(`download.py` picks the file whose name contains "train"). The reproduce mirror also
-guarantees split parity for the OpenFE-comparable subset.
+(the zip's internal folder names are `microsoft`, `medical`, `broken_machine` --
+rename to the `<key>` above when copying). `download.py` concatenates all 3 source
+splits into one frame; the source's own train/val/test split isn't preserved --
+`afe.benchmark.splits` freezes its own fixed split for every dataset uniformly.
 
 ## 6. Build the frozen split (benchmark vs. corpus)
 ```bash
