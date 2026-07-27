@@ -13,176 +13,52 @@ few lines. That keeps the benchmark neutral and its dependency surface small.
 
 ## Usage
 
-### Install
+### 1. Install
 
 ```bash
 git clone https://github.com/NDarayut/auto-feature-engineering.git
 cd auto-feature-engineering
 python -m venv .venv && . .venv/bin/activate
-pip install -e .                  # core: harness + your own methods and data
-pip install -e ".[datasets]"      # + fetchers for the built-in 22-dataset suite
-pip install -e ".[datasets,test]" # + pytest
+pip install -e ".[datasets]"   # harness + dataset fetchers
 ```
 
-Python 3.10+ (developed on 3.12). To use it from another project:
+Python 3.10+ (developed on 3.12). From another project:
 
 ```bash
 pip install "auto-feature-engineering[datasets] @ git+https://github.com/NDarayut/auto-feature-engineering.git"
 ```
 
-### Start here: which entry point?
+### 2. Set up the datasets
 
-There are two, and they share the same core — identical preprocessing,
-identical frozen split, identical 3-model scoring panel, identical output
-rows. They differ only in where the data comes from and how much the run is
-guarded.
+Everything downloads automatically to `data/cache/` on first use, except:
 
-**`compare()` — the Python API. Start here.** For your own data, or a quick
-check against a few built-in datasets. This example is complete and runnable:
-
-```python
-import numpy as np, pandas as pd
-from afe.benchmark import compare, BaselineMethod
-
-# Toy data whose signal is an interaction: y = 1 when a*b > 0.
-rng = np.random.RandomState(0)
-X = pd.DataFrame({"a": rng.randn(800), "b": rng.randn(800)})
-y = pd.Series(((X.a * X.b) > 0).astype(int))
-
-# A "method" is just a function that returns the two frames, with new columns.
-def add_interaction(X_train, y_train, X_test, task):
-    f = lambda d: d.assign(a_times_b=d.a * d.b)
-    return f(X_train), f(X_test)
-
-print(compare(methods=[BaselineMethod, add_interaction],
-              custom_datasets={"demo": (X, y)}))
-```
-
-## linear
-| dataset | add_interaction | baseline |
-|---|---|---|
-| demo    | 1.000           | 0.540    |
-
-## tree
-| dataset | add_interaction | baseline |
-|---|---|---|
-| demo    | 1.000           | 1.000    |
-
-## knn
-| dataset | add_interaction | baseline |
-|---|---|---|
-| demo    | 0.999           | 0.995    |
-
-
-Read that as: the engineered feature is *essential* for the linear model
-(0.540 — chance — up to 1.000) and irrelevant to the tree, which already
-learns interactions on its own. That split is the whole reason three model
-families are scored: a feature set that only helps one family is a
-model-specific patch, not better representation.
-
-**`scripts.run_benchmark` — the CLI.** For the full 22-dataset suite: long,
-resumable, resource-guarded runs that write JSONL for later reporting.
+**Kaggle** (for `ieee-cis-fraud`, `bnp-paribas-claims`, `home-credit-default`,
+`house-prices`) — put an API token at `~/.kaggle/kaggle.json`
+([Account → API → Create New API Token](https://www.kaggle.com/settings)):
 
 ```bash
-python -m scripts.run_benchmark --methods baseline mypkg:MyMethod \
-    --datasets german-credit concrete-strength --out results/run.jsonl
-python -m scripts.report_benchmark results/run.jsonl --out report.md
+mkdir -p ~/.kaggle && mv ~/Downloads/kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
 ```
 
-| | `compare()` | `run_benchmark` CLI |
-|---|---|---|
-| **your own `(X, y)` data** | yes, via `custom_datasets=` | no — built-in keys only |
-| **built-in 22 datasets** | yes, via `datasets=` | yes |
-| **how you pass a method** | the object/function itself | an import path string |
-| **result** | a `CompareResult` you can print | a JSONL file |
-| **timeout per method** | off unless you set `budget_seconds=` | on (`--budget`, default 300s) |
-| **memory/width guards** | **none** | `--max-cols`, `--fit-sample-rows`, `--transform-chunk-rows`, `--max-mem-gb` |
-| **resumable** | with `out_path=` | yes |
+Then accept each competition's rules once, or downloads fail with HTTP 403:
+[IEEE-CIS Fraud](https://www.kaggle.com/competitions/ieee-fraud-detection/rules) ·
+[BNP Paribas Claims](https://www.kaggle.com/competitions/bnp-paribas-cardif-claims-management/rules) ·
+[Home Credit Default](https://www.kaggle.com/competitions/home-credit-default-risk/rules) ·
+[House Prices](https://www.kaggle.com/competitions/house-prices-advanced-regression-techniques/rules)
 
-> **Use the CLI for the large datasets.** `compare()` applies no width cap,
-> row sampling, or memory ceiling, so `compare(datasets=["ieee-cis-fraud"])`
-> (590k rows × 393 columns) can exhaust your machine's RAM. The CLI's guards
-> are on by default and degrade gracefully instead.
+**Manual drop** (for `microsoft-mslr`, `medical`, `broken-machine`) — grab
+`data.zip` from
+[`ZhangTP1996/OpenFE_reproduce`](https://github.com/ZhangTP1996/OpenFE_reproduce),
+unzip, and copy each folder (`microsoft`, `medical`, `broken_machine`) to
+`data/cache/raw/<key>/`, renamed to the dataset key. Each must contain
+`N_*.npy`, `y_*.npy` (and optionally `C_*.npy`) for `train`/`val`/`test`.
 
-The rest of this section covers both in more detail.
+Skip either step if you don't need those datasets — the other 15 work
+without it.
 
-### Command line
+### 3. Run a benchmark
 
-Reference your method by import path; `baseline` is the one built-in name.
-
-```bash
-# Compare your method against the baseline, 900s budget per (dataset, method):
-python -m scripts.run_benchmark \
-    --datasets german-credit concrete-strength house-prices \
-    --methods baseline mypkg.methods:MyMethod \
-    --budget 900 --out results/my_run.jsonl
-
-# Everything: all 22 datasets (smallest first), resumable if interrupted:
-python -m scripts.run_benchmark --methods baseline mypkg.methods:MyMethod
-
-# Aggregate a results file into a per-task/sector report:
-python -m scripts.report_benchmark results/my_run.jsonl
-```
-
-Runs are **resumable**: (dataset, method) pairs already present in `--out`
-are skipped on restart, so an interrupted sweep continues where it left off.
-
-### Python API
-
-```python
-from afe.benchmark import compare, BaselineMethod
-from mypkg.methods import MyMethod
-
-result = compare(
-    methods=[BaselineMethod, MyMethod],
-    datasets=["german-credit", "concrete-strength"],   # built-in suite keys
-)
-print(result)          # per-model-family markdown score table
-df = result.to_frame() # raw rows as a pandas DataFrame
-```
-
-### Plugging in a method
-
-A method is either a **plain function**:
-
-```python
-def my_method(X_train, y_train, X_test, task):
-    ...                                   # task is "classification" | "regression"
-    return X_train_new, X_test_new        # original + engineered columns
-```
-
-or a **class** with the `fit_transform`/`transform` contract (a structural
-protocol — no inheritance needed):
-
-```python
-class MyMethod:
-    name = "my-method"                    # display name in result tables
-
-    def fit_transform(self, X_train, y_train, task): ...  # only ever sees train
-    def transform(self, X_test): ...                      # replays fitted state
-```
-
-Then:
-
-```python
-from afe.benchmark import compare
-
-result = compare(
-    methods=[my_method, MyMethod, ("my-tuned-variant", MyMethod())],
-    datasets=["german-credit"],               # built-in suite, and/or:
-    custom_datasets={"my-data": (X, y)},      # your own (X, y) data
-    out_path="results/my_run.jsonl",          # optional: persist + resume
-    budget_seconds=600,                       # optional: subprocess isolation + hard timeout
-)
-```
-
-Both dataset sources can be mixed in one call.
-
-### Benchmarking a third-party library
-
-Nothing about a competitor method is special — install it and write the same
-plain function. Wrapping [OpenFE](https://github.com/IIIS-Li-Group/OpenFE)
-(NeurIPS 2022) takes four lines:
+Install a method to test and write a small adapter. OpenFE takes four lines:
 
 ```bash
 pip install openfe
@@ -196,34 +72,154 @@ def openfe(X_train, y_train, X_test, task):
     return transform(X_train, X_test, feats[:10], n_jobs=1)
 ```
 
-```bash
-python -m scripts.run_benchmark --datasets german-credit \
-    --methods baseline adapters:openfe --budget 300
+Then compare it against the baseline:
+
+```python
+from afe.benchmark import compare, BaselineMethod
+from adapters import openfe
+
+result = compare(
+    methods=[BaselineMethod, openfe],
+    datasets=["german-credit", "concrete-strength"],
+)
+print(result)
 ```
 
-That is the complete adapter. Pass `seed=0` to `.fit()` if you want runs to
-be reproducible — OpenFE is otherwise nondeterministic, and its score will
-drift slightly between runs.
+```
+## knn
+| dataset | baseline | openfe |
+|---|---|---|
+| concrete-strength | 0.716 | 0.818 |
+| german-credit | 0.780 | 0.776 |
+| **mean** | 0.748 | 0.797 |
 
-Two things the harness handles so your adapter doesn't have to:
+## linear
+| dataset | baseline | openfe |
+|---|---|---|
+| concrete-strength | 0.647 | 0.789 |
+| german-credit | 0.815 | 0.822 |
+| **mean** | 0.731 | 0.805 |
+
+## tree
+| dataset | baseline | openfe |
+|---|---|---|
+| concrete-strength | 0.935 | 0.936 |
+| german-credit | 0.829 | 0.831 |
+| **mean** | 0.882 | 0.884 |
+```
+
+One table per model family. Read across them: on `concrete-strength`
+OpenFE's features are worth a lot to the linear model (0.647 → 0.789) and
+the kNN (0.716 → 0.818), but almost nothing to the tree (0.935 → 0.936),
+which already captures those interactions on its own. That is why three
+families are scored — a single-model view would have called this a big win
+or no win at all, depending on which model you picked.
+
+### Common variations
+
+```python
+from afe.benchmark import compare, BENCHMARK, BaselineMethod
+from adapters import openfe
+
+# Every dataset in the suite (long — see "Long unattended runs" below).
+compare(methods=[BaselineMethod, openfe],
+        datasets=[spec.key for spec in BENCHMARK])
+
+# Your own data instead of (or alongside) the built-in suite.
+compare(methods=[BaselineMethod, openfe],
+        custom_datasets={"my-data": (X, y)})
+
+# Score with one model family only — roughly 3x faster.
+compare(methods=[BaselineMethod, openfe],
+        datasets=["german-credit"], model_families=["tree"])
+
+# Kill any method that exceeds 300s, and save + resume to JSONL.
+compare(methods=[BaselineMethod, openfe],
+        datasets=["nomao", "electricity"],
+        budget_seconds=300,
+        out_path="results/my_run.jsonl")
+
+result = compare(methods=[BaselineMethod, openfe], datasets=["german-credit"])
+df = result.to_frame()      # raw rows as a pandas DataFrame
+```
+
+`budget_seconds` also moves generation into a subprocess, so a method that
+hangs or crashes is recorded and the run continues. Without it, methods run
+in-process with no timeout.
+
+> **Large datasets: use the command line.** `compare()` applies no width cap,
+> row sampling, or memory ceiling, so `compare(datasets=["ieee-cis-fraud"])`
+> (590k rows × 393 columns) can exhaust your RAM. The CLI's guards are on by
+> default and degrade gracefully instead.
+
+### 4. The same thing from the command line
+
+Reference a method by import path; `baseline` is the one built-in name.
+
+```bash
+# The run from step 3:
+python -m scripts.run_benchmark \
+    --datasets german-credit concrete-strength \
+    --methods baseline adapters:openfe \
+    --out results/my_run.jsonl
+
+# All 22 datasets (smallest first), 900s budget, resumable if interrupted:
+python -m scripts.run_benchmark --methods baseline adapters:openfe --budget 900
+
+# Turn the results into a markdown report:
+python -m scripts.report_benchmark results/my_run.jsonl --out report.md
+```
+
+Runs are **resumable**: (dataset, method) pairs already in `--out` are
+skipped on restart. Unlike `compare()`, the CLI applies memory and width
+guards by default — see [Parameters](#parameters).
+
+### 5. Plug in your own method
+
+A method is either a **plain function**:
+
+```python
+def my_method(X_train, y_train, X_test, task):
+    ...                                   # task is "classification" | "regression"
+    return X_train_new, X_test_new        # original + engineered columns
+```
+
+or a **class** with the `fit_transform`/`transform` contract (a structural
+protocol — no inheritance needed), for libraries that carry state from fit
+to transform:
+
+```python
+class MyMethod:
+    name = "my-method"                    # display name in result tables
+
+    def fit_transform(self, X_train, y_train, task): ...  # only ever sees train
+    def transform(self, X_test): ...                      # replays fitted state
+```
+
+Either form drops into the same calls:
+
+```python
+compare(methods=[BaselineMethod, my_method, MyMethod,
+                 ("my-tuned-variant", MyMethod())],   # (name, instance) to relabel
+        datasets=["german-credit"])
+```
+
+```bash
+python -m scripts.run_benchmark --methods baseline mypkg.methods:MyMethod
+```
+
+Three things the harness handles so your method doesn't have to:
 
 - **`task` is always `"classification"` or `"regression"`.** Datasets are
   also tagged `multiclass`, but that only changes how the *scoring panel*
-  computes AUC — it is narrowed before your method sees it, so you never
-  write `"regression" if task == "regression" else "classification"`.
+  computes AUC — it is narrowed before your method sees it.
 - **Generation runs in a fresh temp working directory.** Several libraries
   (openfe included) write scratch files to hardcoded relative paths that
-  collide between runs. The harness isolates the cwd around every
-  `fit_transform`/`transform`, so this class of bug cannot occur.
-- **Warnings from inside your method are silenced.** Method internals can
-  warn per model fit — OpenFE emits ~70 identical LightGBM deprecation
-  warnings in one small run — which buries the harness's own output. Only
-  the generation step is silenced; dataset loading, encoding, and scoring
-  warnings still surface. Set `AFE_METHOD_WARNINGS=default` (or `once`,
-  `error`) to see them while debugging your method.
-
-Use the class form only when a library needs state carried from fit to
-transform that the function form can't express.
+  collide between runs.
+- **Warnings from inside your method are silenced.** OpenFE alone emits ~70
+  identical LightGBM deprecation warnings per small run. Only the generation
+  step is silenced — dataset loading, encoding, and scoring warnings still
+  surface. Set `AFE_METHOD_WARNINGS=default` to see them while debugging.
 
 ### How a run works
 
@@ -240,48 +236,12 @@ For each dataset, the harness:
    crashes, or exhausts memory becomes a `timeout`/`crashed`/`oom` result
    row while the sweep continues;
 4. scores the engineered features with a **3-family model panel** — LightGBM
-   (`tree`), Logistic Regression / Ridge (`linear`), and kNN (`knn`) — since
-   a feature set that helps all three families is genuinely better
-   representation, not a model-specific artifact;
+   (`tree`), Logistic Regression / Ridge (`linear`), and kNN (`knn`);
 5. writes **one JSONL row per (dataset, method, model family)** as it is
    produced.
 
 Metrics: ROC AUC for binary classification, macro one-vs-rest ROC AUC for
 multiclass, R² (plus MAE) for regression.
-
-### Dataset setup
-
-Most datasets download automatically on first use and are cached under
-`data/cache/`. Two exceptions:
-
-**Kaggle credentials** — needed for `ieee-cis-fraud`, `bnp-paribas-claims`,
-`home-credit-default`, and `house-prices`:
-
-1. Kaggle → **Account → API → Create New API Token** (downloads `kaggle.json`).
-2. ```bash
-   mkdir -p ~/.kaggle && mv ~/Downloads/kaggle.json ~/.kaggle/
-   chmod 600 ~/.kaggle/kaggle.json
-   ```
-3. **Accept each competition's rules once** in the browser (competition page →
-   *Rules* → *I Understand and Accept*), or downloads fail with HTTP 403.
-
-**Datasets needing a manual drop** — `microsoft-mslr`, `medical`, and
-`broken-machine` have no clean canonical source. They ship as RTDL-style
-`.npy` dumps in a `data.zip` linked from
-[`ZhangTP1996/OpenFE_reproduce`](https://github.com/ZhangTP1996/OpenFE_reproduce).
-Download it, unzip, and drop each dataset's folder at:
-
-```
-data/cache/raw/<key>/            # <key> = microsoft-mslr | medical | broken-machine
-  N_train.npy  N_val.npy  N_test.npy   # numeric features (required)
-  C_train.npy  C_val.npy  C_test.npy   # categorical features (optional)
-  y_train.npy  y_val.npy  y_test.npy   # target (required)
-```
-
-The zip's internal folder names are `microsoft`, `medical`, and
-`broken_machine` — rename each to the `<key>` above when copying. All three
-source splits are concatenated into one frame; the harness then freezes its
-own fixed split, uniformly, for every dataset.
 
 ### Long unattended runs
 
@@ -293,7 +253,7 @@ memory.
 
 ```bash
 # Anything after `--` is passed straight through to run_benchmark.py:
-./scripts/benchmark_ctl.sh start -- --methods baseline mypkg.methods:MyMethod --budget 900
+./scripts/benchmark_ctl.sh start -- --methods baseline adapters:openfe --budget 900
 ./scripts/benchmark_ctl.sh status     # running? + row/status counts so far
 ./scripts/benchmark_ctl.sh tail       # follow the log
 ./scripts/benchmark_ctl.sh stop       # kills the whole process group
@@ -334,9 +294,7 @@ closer-to-full-data runs and have the memory to spare.
 | `baseline` | `BaselineMethod` | No feature engineering — the raw (prepped) features. The reference arm every comparison is read against. |
 
 That is the complete list. Everything else is supplied by you — see
-[Plugging in a method](#plugging-in-a-method) above and
-[Benchmarking a third-party library](#benchmarking-a-third-party-library)
-below.
+[Plug in your own method](#5-plug-in-your-own-method).
 
 ### Available datasets
 
@@ -380,11 +338,12 @@ the same tables on the same splits.
 
 ### Raw output
 
-`--out` is a JSONL file, one row per (dataset, method, model family),
-flushed as each row is produced. A successful row looks like:
+`--out` (CLI) and `out_path=` (`compare()`) write a JSONL file, one row per
+(dataset, method, model family), flushed as each row is produced. A
+successful row:
 
 ```json
-{"key": "nomao", "method": "cafem", "fold_id": "split0", "protocol": "holdout", "task": "classification", "status": "ok", "gen_elapsed_s": 11.10, "fit_elapsed_s": 11.01, "transform_elapsed_s": 0.09, "peak_mem_mb": 564.7, "n_candidates": 8, "feature_efficiency": 1.0, "model_family": "tree", "n_features_generated": 8, "n_features_final": 126, "metric": "auc", "value": 0.9941}
+{"key": "nomao", "method": "openfe", "fold_id": "split0", "protocol": "holdout", "task": "classification", "status": "ok", "gen_elapsed_s": 11.10, "fit_elapsed_s": 11.01, "transform_elapsed_s": 0.09, "peak_mem_mb": 564.7, "n_candidates": 8, "feature_efficiency": 1.0, "model_family": "tree", "n_features_generated": 8, "n_features_final": 126, "metric": "auc", "value": 0.9941}
 ```
 
 A failed/killed run still gets a row (`model_family`/`metric`/`value` are
@@ -434,9 +393,8 @@ model family).
 
 **Full worked example: [`docs/benchmark_report.md`](docs/benchmark_report.md)**
 — OpenFE vs. a CAFEM-style RL method across all 22 datasets. Neither ships
-with this harness; both were plugged in as external methods exactly as
-described in [Benchmarking a third-party library](#benchmarking-a-third-party-library),
-which makes the report a working demonstration of that path. It contains:
+with this harness; both were plugged in as external methods, which makes the
+report a working demonstration of that path. It contains:
 
 *Datasets* — the legend mapping each abbreviation to its full key, task,
 sector, and metric:
