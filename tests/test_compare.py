@@ -132,15 +132,25 @@ def test_compare_result_repr_is_summary():
     assert isinstance(result, CompareResult)
 
 
-def test_compare_writes_no_files_unless_asked(tmp_path, monkeypatch, capsys):
-    """compare() is in-memory by default, and says so."""
-    monkeypatch.chdir(tmp_path)
+def test_compare_writes_report_by_default(tmp_path, monkeypatch):
+    """A report is produced without asking, like the CLI."""
+    monkeypatch.setattr(compare_mod, "RESULTS_DIR", tmp_path)
     X = pd.DataFrame({"a": [0.0, 1.0, 2.0, 3.0] * 8, "b": [1.0, 0.0] * 16})
     y = pd.Series([0, 1] * 16)
     compare(methods=[BaselineMethod], custom_datasets={"d": (X, y)},
-            model_families=["tree"])
-    assert list(tmp_path.iterdir()) == [], "compare() must not create files by default"
-    assert "returned object only" in capsys.readouterr().err
+            model_families=["tree"], progress=False)
+    default = tmp_path / "compare_report.md"
+    assert default.exists(), "compare() should write a report by default"
+    assert default.read_text().startswith("# Benchmark Report")
+
+
+def test_compare_report_can_be_disabled(tmp_path, monkeypatch):
+    monkeypatch.setattr(compare_mod, "RESULTS_DIR", tmp_path)
+    X = pd.DataFrame({"a": [0.0, 1.0, 2.0, 3.0] * 8, "b": [1.0, 0.0] * 16})
+    y = pd.Series([0, 1] * 16)
+    compare(methods=[BaselineMethod], custom_datasets={"d": (X, y)},
+            model_families=["tree"], report_path=None, progress=False)
+    assert list(tmp_path.glob("*.md")) == [], "report_path=None must skip the report"
 
 
 def test_compare_writes_report_when_asked(tmp_path):

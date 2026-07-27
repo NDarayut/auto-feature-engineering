@@ -78,48 +78,61 @@ Then compare it against the baseline:
 from afe.benchmark import compare, BaselineMethod
 from adapters import openfe
 
-result = compare(
+compare(
     methods=[BaselineMethod, openfe],
     datasets=["german-credit", "concrete-strength"],
+    report_path="results/my_run.md",
 )
-print(result)
 ```
 
+Progress prints as it runs, and the report is written when it finishes — no
+separate reporting step:
+
 ```
-## knn
-| dataset | baseline | openfe |
-|---|---|---|
-| concrete-strength | 0.716 | 0.818 |
-| german-credit | 0.780 | 0.776 |
-| **mean** | 0.748 | 0.797 |
-
-## linear
-| dataset | baseline | openfe |
-|---|---|---|
-| concrete-strength | 0.647 | 0.789 |
-| german-credit | 0.815 | 0.822 |
-| **mean** | 0.731 | 0.805 |
-
-## tree
-| dataset | baseline | openfe |
-|---|---|---|
-| concrete-strength | 0.935 | 0.936 |
-| german-credit | 0.829 | 0.831 |
-| **mean** | 0.882 | 0.884 |
+benchmarking 2 methods on 2 datasets -- 4 pairs
+[1/4] german-credit / baseline: ok in 0.0s -- knn 0.780  linear 0.815  tree 0.829
+[2/4] german-credit / openfe: ok in 43.7s -- knn 0.776  linear 0.822  tree 0.831
+[3/4] concrete-strength / baseline: ok in 0.0s -- knn 0.716  linear 0.647  tree 0.935
+[4/4] concrete-strength / openfe: ok in 6.8s -- knn 0.818  linear 0.789  tree 0.936
+done: 12 result rows in 52.0s
+report: results/my_run.md
 ```
 
-`compare()` keeps everything in memory and writes **no files** unless you
-ask — `print(result)` to see the tables, `report_path=` for a markdown
-report, `out_path=` for the raw JSONL (see the next section). The CLI is the
-opposite: it always writes a report. A run that saved nothing says so on its
-last line.
+`report_path` is optional — without it the report goes to
+`results/compare_report.md`. Pass `report_path=None` to skip it.
 
-One table per model family. Read across them: on `concrete-strength`
-OpenFE's features are worth a lot to the linear model (0.647 → 0.789) and
-the kNN (0.716 → 0.818), but almost nothing to the tree (0.935 → 0.936),
-which already captures those interactions on its own. That is why three
-families are scored — a single-model view would have called this a big win
-or no win at all, depending on which model you picked.
+Inside `results/my_run.md`:
+
+```markdown
+## Overview
+
+| method | GC | CS |
+|---|---|---|
+| baseline | 0.808 | 0.766 |
+| openfe | **0.810** | **0.848** |
+
+## Per-method scores
+
+| method | model | GC | CS |
+|---|---|---|---|
+| baseline | knn | 0.780 | 0.716 |
+|  | linear | 0.815 | 0.647 |
+|  | tree | 0.829 | 0.935 |
+| openfe | knn | 0.776 | 0.818 |
+|  | linear | 0.822 | 0.789 |
+|  | tree | 0.831 | 0.936 |
+```
+
+Read the per-method table across model families: on `concrete-strength`
+(CS) OpenFE's features are worth a lot to the linear model (0.647 → 0.789)
+and the kNN (0.716 → 0.818), but almost nothing to the tree
+(0.935 → 0.936), which already captures those interactions on its own. That
+is why three families are scored — a single-model view would have called
+this a big win or no win at all, depending on which model you picked.
+
+The report also carries dataset/speed/feature-count/by-sector tables and a
+failure summary — see [Reports](#reports). (These exact numbers will shift a
+little between runs: OpenFE is nondeterministic unless you pass `seed=0`.)
 
 ### Common variations
 
@@ -145,17 +158,14 @@ compare(methods=[BaselineMethod, openfe],
         budget_seconds=300,
         out_path="results/my_run.jsonl")
 
-# Write the markdown report inline, no separate report step.
+# Silence the progress lines, and skip the report.
 compare(methods=[BaselineMethod, openfe],
         datasets=["german-credit"],
-        report_path="results/my_run.md")
+        progress=False, report_path=None)
 
-# Silence the per-pair progress lines.
-compare(methods=[BaselineMethod, openfe],
-        datasets=["german-credit"], progress=False)
-
+# The return value carries the same rows, for your own analysis.
 result = compare(methods=[BaselineMethod, openfe], datasets=["german-credit"])
-df = result.to_frame()      # raw rows as a pandas DataFrame
+df = result.to_frame()      # one row per (dataset, method, model family)
 ```
 
 `budget_seconds` also moves generation into a subprocess, so a method that
@@ -423,9 +433,9 @@ df.groupby(["method", "model_family"])["value"].mean()
 
 ### Generating a markdown report
 
-Both entry points write one for you — the CLI by default (next to `--out`),
-`compare()` when given `report_path=`. To regenerate from an existing
-results file, or to report on a run someone else produced:
+Both entry points write one automatically — the CLI next to `--out`,
+`compare()` to `report_path` or `results/compare_report.md`. To regenerate
+from an existing results file, or to report on a run someone else produced:
 
 ```bash
 python -m scripts.report_benchmark results/my_run.jsonl                        # to stdout

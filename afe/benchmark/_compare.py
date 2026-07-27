@@ -43,8 +43,23 @@ from ..methods import isolated_cwd, method_task, quiet_method_warnings
 from .progress import ProgressReporter
 from .report import build_report
 from ..task import infer_task
-from .benchmark import _completed_pairs
+from .benchmark import RESULTS_DIR, _completed_pairs
 from .download import load
+
+class _DefaultReport:
+    """Sentinel for ``compare(report_path=...)``.
+
+    A report is written by default, and ``report_path=None`` explicitly opts
+    out -- a plain ``None`` default could not tell "unspecified" from "don't
+    write one". A dedicated class rather than a sentinel string, so no
+    caller-supplied value can ever compare identical to it.
+    """
+
+    def __repr__(self) -> str:
+        return "<default report path>"
+
+
+_DEFAULT_REPORT = _DefaultReport()
 from .models import (MODEL_FAMILIES, feature_efficiency, fit_and_score,
                      prepare_family_input)
 from .registry import BENCHMARK
@@ -299,7 +314,7 @@ def compare(
     resume: bool = True,
     use_cache: bool = True,
     progress: bool = True,
-    report_path: str | Path | None = None,
+    report_path: str | Path | None | _DefaultReport = _DEFAULT_REPORT,
 ) -> CompareResult:
     """Benchmark ``methods`` against each other on ``datasets``/``custom_datasets``.
 
@@ -323,8 +338,9 @@ def compare(
     contract as ``afe.benchmark.run_benchmark``).
 
     ``progress`` prints one line per completed (dataset, method) pair to
-    stderr -- stdout stays clean for the result table. ``report_path``
-    writes a markdown report there when the run finishes.
+    stderr. A markdown report is written when the run finishes -- to
+    ``report_path`` if given, otherwise ``results/compare_report.md``. Pass
+    ``report_path=None`` to skip it.
     """
     if not datasets and not custom_datasets:
         raise ValueError("pass datasets=[...] and/or custom_datasets={...}")
@@ -384,10 +400,12 @@ def compare(
     if out and out.exists():
         rows = _load_all_rows(out)
 
-    report_out = Path(report_path) if report_path else None
+    if report_path is _DEFAULT_REPORT:
+        report_out = RESULTS_DIR / "compare_report.md"
+    else:
+        report_out = Path(report_path) if report_path else None
     if report_out:
         report_out.parent.mkdir(parents=True, exist_ok=True)
         report_out.write_text(build_report(rows))
-    reporter.finish(len(rows), out_path=out, report_path=report_out,
-                    hint_when_unsaved=True)
+    reporter.finish(len(rows), out_path=out, report_path=report_out)
     return CompareResult(rows=rows)
