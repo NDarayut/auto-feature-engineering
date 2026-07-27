@@ -105,68 +105,43 @@ Both dataset sources can be mixed in one call.
 ### Benchmarking a third-party library
 
 Nothing about a competitor method is special — install it and write the same
-small adapter. The example below wraps
-[OpenFE](https://github.com/IIIS-Li-Group/OpenFE) (NeurIPS 2022) and is the
-exact code used to produce OpenFE's numbers in
-[`docs/benchmark_report.md`](docs/benchmark_report.md).
+plain function. Wrapping [OpenFE](https://github.com/IIIS-Li-Group/OpenFE)
+(NeurIPS 2022) takes four lines:
 
 ```bash
 pip install openfe
 ```
 
 ```python
-# adapters/openfe_adapter.py
-import os, shutil, tempfile
-
-
-class _IsolatedCwd:
-    """openfe writes hardcoded relative temp files; give each call a fresh cwd."""
-    def __enter__(self):
-        self._prev = os.getcwd()
-        self._tmp = tempfile.mkdtemp(prefix="openfe_")
-        os.chdir(self._tmp)
-        return self
-
-    def __exit__(self, *exc):
-        os.chdir(self._prev)
-        shutil.rmtree(self._tmp, ignore_errors=True)
-
-
-class OpenFEMethod:
-    name = "openfe"
-
-    def __init__(self, n_new_features=10, n_jobs=1):
-        self.n_new_features, self.n_jobs = n_new_features, n_jobs
-
-    def fit_transform(self, X_train, y_train, task):
-        from openfe import OpenFE, transform
-        self._X_train = X_train
-        task_str = "regression" if task == "regression" else "classification"
-        with _IsolatedCwd():
-            ofe = OpenFE()
-            feats = ofe.fit(data=X_train, label=y_train, task=task_str,
-                            n_jobs=self.n_jobs, seed=0, verbose=False)
-            self._selected = feats[: self.n_new_features]
-            X_new, _ = transform(X_train, X_train, self._selected, n_jobs=self.n_jobs)
-        return X_new
-
-    def transform(self, X_test):
-        from openfe import transform
-        with _IsolatedCwd():
-            _, X_new = transform(self._X_train, X_test, self._selected,
-                                 n_jobs=self.n_jobs)
-        return X_new
+# adapters.py
+def openfe(X_train, y_train, X_test, task):
+    from openfe import OpenFE, transform
+    feats = OpenFE().fit(data=X_train, label=y_train, task=task, n_jobs=1, verbose=False)
+    return transform(X_train, X_test, feats[:10], n_jobs=1)
 ```
 
 ```bash
 python -m scripts.run_benchmark --datasets german-credit \
-    --methods baseline adapters.openfe_adapter:OpenFEMethod --budget 300
+    --methods baseline adapters:openfe --budget 300
 ```
 
-The `_IsolatedCwd` wrapper is the one non-obvious part, and it generalizes:
-some libraries write temp files to hardcoded relative paths, which collide
-across runs. Isolating the working directory per call is a good default when
-adapting any library that touches disk.
+That is the complete adapter. Pass `seed=0` to `.fit()` if you want runs to
+be reproducible — OpenFE is otherwise nondeterministic, and its score will
+drift slightly between runs.
+
+Two things the harness handles so your adapter doesn't have to:
+
+- **`task` is always `"classification"` or `"regression"`.** Datasets are
+  also tagged `multiclass`, but that only changes how the *scoring panel*
+  computes AUC — it is narrowed before your method sees it, so you never
+  write `"regression" if task == "regression" else "classification"`.
+- **Generation runs in a fresh temp working directory.** Several libraries
+  (openfe included) write scratch files to hardcoded relative paths that
+  collide between runs. The harness isolates the cwd around every
+  `fit_transform`/`transform`, so this class of bug cannot occur.
+
+Use the class form only when a library needs state carried from fit to
+transform that the function form can't express.
 
 ### How a run works
 

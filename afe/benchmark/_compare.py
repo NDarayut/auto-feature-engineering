@@ -39,6 +39,7 @@ import pandas as pd
 
 from ..encoders import _split_columns
 from ..methods import AutoFEMethod, prep_for_generation
+from ..methods import isolated_cwd, method_task
 from ..task import infer_task
 from .benchmark import _completed_pairs
 from .download import load
@@ -77,12 +78,17 @@ def _generate_features(method: MethodLike, X_train, y_train, X_test, task):
     """Dispatch one method to ``(X_train_gen, X_test_gen)``, either calling
     style (class/instance with fit_transform+transform, or a plain function)."""
     obj = method() if isinstance(method, type) else method
+    # isolated_cwd: methods may write scratch files to hardcoded relative
+    # paths; method_task: methods only ever see classification/regression.
+    task = method_task(task)
     if hasattr(obj, "fit_transform") and hasattr(obj, "transform"):
-        X_train_gen = obj.fit_transform(X_train, y_train, task)
-        X_test_gen = obj.transform(X_test)
+        with isolated_cwd():
+            X_train_gen = obj.fit_transform(X_train, y_train, task)
+            X_test_gen = obj.transform(X_test)
         return X_train_gen, X_test_gen
     if callable(obj):
-        result = obj(X_train, y_train, X_test, task)
+        with isolated_cwd():
+            result = obj(X_train, y_train, X_test, task)
         if not (isinstance(result, tuple) and len(result) == 2):
             raise TypeError(
                 "a plain-function method must return (X_train_new, X_test_new); "

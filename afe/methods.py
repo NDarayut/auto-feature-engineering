@@ -63,6 +63,47 @@ class AutoFEMethod(Protocol):
     def transform(self, X_test: pd.DataFrame) -> pd.DataFrame: ...
 
 
+def method_task(task: str) -> str:
+    """Narrow a dataset's task to what a *method* needs to know.
+
+    Datasets are tagged ``classification``/``multiclass``/``regression``, but
+    the multiclass distinction only matters to the scoring panel (which picks
+    one-vs-rest AUC). Feature generation never cares, and forcing every
+    adapter to write ``"regression" if task == "regression" else
+    "classification"`` is pure boilerplate -- so the harness narrows it once,
+    here, and methods only ever see ``classification`` or ``regression``.
+    """
+    return "regression" if task == "regression" else "classification"
+
+
+class isolated_cwd:  # noqa: N801 -- used as a context manager, reads as a verb
+    """Run a block in a fresh temp directory, then restore and clean up.
+
+    Applied by the harness around every method's generation step. Several
+    AutoFE libraries write scratch files to *hardcoded relative* paths (e.g.
+    openfe's ``./openfe_tmp_data.feather``, which has no override parameter),
+    so two runs in the same working directory can collide. Giving each
+    generation its own directory makes that class of bug impossible without
+    any adapter having to know about it.
+    """
+
+    def __enter__(self):
+        import os
+        import tempfile
+
+        self._prev_cwd = os.getcwd()
+        self._tmpdir = tempfile.mkdtemp(prefix="afe_gen_")
+        os.chdir(self._tmpdir)
+        return self
+
+    def __exit__(self, *exc_info):
+        import os
+        import shutil
+
+        os.chdir(self._prev_cwd)
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
+
+
 class BaselineMethod:
     """No feature engineering -- the raw (prepped) features, unchanged."""
 
