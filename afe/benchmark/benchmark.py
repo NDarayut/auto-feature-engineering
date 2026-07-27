@@ -58,7 +58,7 @@ import pandas as pd
 
 from ..encoders import _split_columns
 from ..methods import (METHODS, isolated_cwd, method_task, prep_for_generation,
-                       resolve_method)
+                       quiet_method_warnings, resolve_method)
 from .download import load
 from .models import (MODEL_FAMILIES, feature_efficiency, fit_and_score,
                      prepare_family_input)
@@ -145,7 +145,7 @@ def _generation_worker(method_name, X_train, y_train, X_test, task, queue,
         X_fit, y_fit = _sample_for_fit(X_train, y_train, fit_sample_rows)
         # isolated_cwd: methods may write scratch files to hardcoded relative
         # paths; method_task: methods only ever see classification/regression.
-        with isolated_cwd():
+        with isolated_cwd(), quiet_method_warnings():
             method.fit_transform(X_fit, y_fit, method_task(task))
             t1 = time.time()
             X_train_gen = _chunked_transform(method, X_train, transform_chunk_rows)

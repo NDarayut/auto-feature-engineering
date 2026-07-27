@@ -39,7 +39,7 @@ import pandas as pd
 
 from ..encoders import _split_columns
 from ..methods import AutoFEMethod, prep_for_generation
-from ..methods import isolated_cwd, method_task
+from ..methods import isolated_cwd, method_task, quiet_method_warnings
 from ..task import infer_task
 from .benchmark import _completed_pairs
 from .download import load
@@ -82,12 +82,12 @@ def _generate_features(method: MethodLike, X_train, y_train, X_test, task):
     # paths; method_task: methods only ever see classification/regression.
     task = method_task(task)
     if hasattr(obj, "fit_transform") and hasattr(obj, "transform"):
-        with isolated_cwd():
+        with isolated_cwd(), quiet_method_warnings():
             X_train_gen = obj.fit_transform(X_train, y_train, task)
             X_test_gen = obj.transform(X_test)
         return X_train_gen, X_test_gen
     if callable(obj):
-        with isolated_cwd():
+        with isolated_cwd(), quiet_method_warnings():
             result = obj(X_train, y_train, X_test, task)
         if not (isinstance(result, tuple) and len(result) == 2):
             raise TypeError(

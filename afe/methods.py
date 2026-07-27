@@ -76,6 +76,54 @@ def method_task(task: str) -> str:
     return "regression" if task == "regression" else "classification"
 
 
+class quiet_method_warnings:  # noqa: N801 -- context manager, reads as a verb
+    """Silence warnings raised inside the method under test.
+
+    A method's internals can warn once per internal model fit. OpenFE, for
+    instance, calls LightGBM with the deprecated ``eval_set=`` argument and
+    emits ~70 identical ``LGBMDeprecationWarning``s in one small run, which
+    buries the harness's actual output. Those come from the method's own
+    dependencies -- the benchmark operator cannot act on them, and only the
+    method's maintainers can fix them.
+
+    Scope is deliberately narrow: this wraps *only* the generation step, so
+    warnings from dataset loading, encoding, and the scoring panel -- the
+    parts this harness is responsible for -- are untouched.
+
+    ``PYTHONWARNINGS`` is set alongside the in-process filter because methods
+    routinely fan work out to child processes (OpenFE uses a
+    ``ProcessPoolExecutor``), and a child's warning registry is not reachable
+    from the parent. Measured on the OpenFE adapter: in-process filtering
+    alone left 69 of 70 warnings, since each worker emitted its own.
+
+    Set ``AFE_METHOD_WARNINGS`` to any ``warnings`` action ("default",
+    "once", "error", ...) to override -- useful when debugging a method whose
+    warnings you *do* want to see.
+    """
+
+    def __enter__(self):
+        import os
+        import warnings
+
+        mode = os.environ.get("AFE_METHOD_WARNINGS", "ignore")
+        self._ctx = warnings.catch_warnings()
+        self._ctx.__enter__()
+        warnings.simplefilter(mode)
+        self._prev_env = os.environ.get("PYTHONWARNINGS")
+        os.environ["PYTHONWARNINGS"] = mode
+        return self
+
+    def __exit__(self, *exc_info):
+        import os
+
+        if self._prev_env is None:
+            os.environ.pop("PYTHONWARNINGS", None)
+        else:
+            os.environ["PYTHONWARNINGS"] = self._prev_env
+        self._ctx.__exit__(*exc_info)
+        return False
+
+
 class isolated_cwd:  # noqa: N801 -- used as a context manager, reads as a verb
     """Run a block in a fresh temp directory, then restore and clean up.
 

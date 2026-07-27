@@ -215,6 +215,12 @@ Two things the harness handles so your adapter doesn't have to:
   (openfe included) write scratch files to hardcoded relative paths that
   collide between runs. The harness isolates the cwd around every
   `fit_transform`/`transform`, so this class of bug cannot occur.
+- **Warnings from inside your method are silenced.** Method internals can
+  warn per model fit — OpenFE emits ~70 identical LightGBM deprecation
+  warnings in one small run — which buries the harness's own output. Only
+  the generation step is silenced; dataset loading, encoding, and scoring
+  warnings still surface. Set `AFE_METHOD_WARNINGS=default` (or `once`,
+  `error`) to see them while debugging your method.
 
 Use the class form only when a library needs state carried from fit to
 transform that the function form can't express.
