@@ -30,6 +30,83 @@ Python 3.10+ (developed on 3.12). To use it from another project:
 pip install "auto-feature-engineering[datasets] @ git+https://github.com/NDarayut/auto-feature-engineering.git"
 ```
 
+### Start here: which entry point?
+
+There are two, and they share the same core — identical preprocessing,
+identical frozen split, identical 3-model scoring panel, identical output
+rows. They differ only in where the data comes from and how much the run is
+guarded.
+
+**`compare()` — the Python API. Start here.** For your own data, or a quick
+check against a few built-in datasets. This example is complete and runnable:
+
+```python
+import numpy as np, pandas as pd
+from afe.benchmark import compare, BaselineMethod
+
+# Toy data whose signal is an interaction: y = 1 when a*b > 0.
+rng = np.random.RandomState(0)
+X = pd.DataFrame({"a": rng.randn(800), "b": rng.randn(800)})
+y = pd.Series(((X.a * X.b) > 0).astype(int))
+
+# A "method" is just a function that returns the two frames, with new columns.
+def add_interaction(X_train, y_train, X_test, task):
+    f = lambda d: d.assign(a_times_b=d.a * d.b)
+    return f(X_train), f(X_test)
+
+print(compare(methods=[BaselineMethod, add_interaction],
+              custom_datasets={"demo": (X, y)}))
+```
+
+```
+## linear
+| dataset | add_interaction | baseline |
+|---|---|---|
+| demo    | 1.000           | 0.540    |
+
+## tree
+| dataset | add_interaction | baseline |
+|---|---|---|
+| demo    | 1.000           | 1.000    |
+
+## knn
+| dataset | add_interaction | baseline |
+|---|---|---|
+| demo    | 0.999           | 0.995    |
+```
+
+Read that as: the engineered feature is *essential* for the linear model
+(0.540 — chance — up to 1.000) and irrelevant to the tree, which already
+learns interactions on its own. That split is the whole reason three model
+families are scored: a feature set that only helps one family is a
+model-specific patch, not better representation.
+
+**`scripts.run_benchmark` — the CLI.** For the full 22-dataset suite: long,
+resumable, resource-guarded runs that write JSONL for later reporting.
+
+```bash
+python -m scripts.run_benchmark --methods baseline mypkg:MyMethod \
+    --datasets german-credit concrete-strength --out results/run.jsonl
+python -m scripts.report_benchmark results/run.jsonl --out report.md
+```
+
+| | `compare()` | `run_benchmark` CLI |
+|---|---|---|
+| **your own `(X, y)` data** | yes, via `custom_datasets=` | no — built-in keys only |
+| **built-in 22 datasets** | yes, via `datasets=` | yes |
+| **how you pass a method** | the object/function itself | an import path string |
+| **result** | a `CompareResult` you can print | a JSONL file |
+| **timeout per method** | off unless you set `budget_seconds=` | on (`--budget`, default 300s) |
+| **memory/width guards** | **none** | `--max-cols`, `--fit-sample-rows`, `--transform-chunk-rows`, `--max-mem-gb` |
+| **resumable** | with `out_path=` | yes |
+
+> **Use the CLI for the large datasets.** `compare()` applies no width cap,
+> row sampling, or memory ceiling, so `compare(datasets=["ieee-cis-fraud"])`
+> (590k rows × 393 columns) can exhaust your machine's RAM. The CLI's guards
+> are on by default and degrade gracefully instead.
+
+The rest of this section covers both in more detail.
+
 ### Command line
 
 Reference your method by import path; `baseline` is the one built-in name.
