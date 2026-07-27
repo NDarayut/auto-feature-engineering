@@ -57,7 +57,7 @@ import numpy as np
 import pandas as pd
 
 from ..encoders import _split_columns
-from ..methods import METHODS, prep_for_generation
+from ..methods import METHODS, prep_for_generation, resolve_method
 from .download import load
 from .models import (MODEL_FAMILIES, feature_efficiency, fit_and_score,
                      prepare_family_input)
@@ -139,7 +139,7 @@ def _generation_worker(method_name, X_train, y_train, X_test, task, queue,
         except (ValueError, OSError):
             pass  # a lower hard limit is already set (e.g. by a container) -- degrade to no cap
     try:
-        method = METHODS[method_name]()
+        method = resolve_method(method_name)()
         t0 = time.time()
         X_fit, y_fit = _sample_for_fit(X_train, y_train, fit_sample_rows)
         method.fit_transform(X_fit, y_fit, task)

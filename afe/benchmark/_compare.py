@@ -60,8 +60,8 @@ def _method_name(spec: MethodSpec, index: int) -> tuple[str, MethodLike]:
     """Resolve a ``methods=`` entry to ``(display_name, method)``.
 
     ``.name`` (a class attribute or instance attribute -- matches
-    ``afe.methods``' adapter convention, e.g. ``OpenFEMethod.name =
-    "openfe"``) wins over ``__name__`` for both classes and instances, so a
+    ``afe.methods``' adapter convention, e.g. ``BaselineMethod.name =
+    "baseline"``) wins over ``__name__`` for both classes and instances, so a
     class's declared ``name`` isn't shadowed by its Python class name.
     """
     if isinstance(spec, tuple) and len(spec) == 2 and isinstance(spec[0], str):

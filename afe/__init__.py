@@ -10,7 +10,7 @@ Public entrypoint::
     from afe import compare
 
     result = compare(
-        methods=[BaselineMethod, OpenFEMethod, my_own_method],
+        methods=[BaselineMethod, my_own_method],
         datasets=["german-credit"],
     )
     print(result)

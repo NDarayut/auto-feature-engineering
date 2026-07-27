@@ -1,5 +1,15 @@
 # Benchmark Report
 
+> Produced by plugging two **external** methods into this harness — OpenFE
+> and a CAFEM-style RL search. Neither ships with the benchmark; both were
+> supplied as user methods exactly as described under "Benchmarking a
+> third-party library" in the repo-root README. The harness itself ships only
+> the no-op `baseline`.
+>
+> Note on reading this: OpenFE timed out on 12 of the 22 datasets (see the
+> failures table at the end), so its group averages cover only the datasets
+> it finished and are not directly comparable to CAFEM's across all 22.
+
 ## Datasets
 
 | abbrev | dataset | task | sector | metric |

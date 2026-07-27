@@ -6,6 +6,11 @@ frozen train/test splits, receives identically preprocessed data, and is
 scored by the same downstream model panel. Failures (timeouts, crashes,
 out-of-memory) are recorded as result rows, never silently dropped.
 
+**No AutoFE library is bundled.** The harness ships exactly one method — the
+no-op `baseline` every comparison is read against. Methods under test are
+yours: your own algorithm, or a third-party one you install and adapt in a
+few lines. That keeps the benchmark neutral and its dependency surface small.
+
 ## Usage
 
 ### Install
@@ -14,23 +19,30 @@ out-of-memory) are recorded as result rows, never silently dropped.
 git clone https://github.com/NDarayut/auto-feature-engineering.git
 cd auto-feature-engineering
 python -m venv .venv && . .venv/bin/activate
-pip install -e ".[benchmark]"      # harness + dataset fetchers (openml, ucimlrepo, kaggle, ...)
-pip install -e ".[benchmark,test]" # + pytest
+pip install -e .                  # core: harness + your own methods and data
+pip install -e ".[datasets]"      # + fetchers for the built-in 22-dataset suite
+pip install -e ".[datasets,test]" # + pytest
 ```
 
-Python 3.10+ (developed on 3.12).
+Python 3.10+ (developed on 3.12). To use it from another project:
+
+```bash
+pip install "auto-feature-engineering[datasets] @ git+https://github.com/NDarayut/auto-feature-engineering.git"
+```
 
 ### Command line
 
+Reference your method by import path; `baseline` is the one built-in name.
+
 ```bash
-# Compare methods on chosen datasets, 900s generation budget per (dataset, method):
+# Compare your method against the baseline, 900s budget per (dataset, method):
 python -m scripts.run_benchmark \
     --datasets german-credit concrete-strength house-prices \
-    --methods baseline openfe cafem \
+    --methods baseline mypkg.methods:MyMethod \
     --budget 900 --out results/my_run.jsonl
 
 # Everything: all 22 datasets (smallest first), resumable if interrupted:
-python -m scripts.run_benchmark --methods baseline openfe cafem featuretools autofeat
+python -m scripts.run_benchmark --methods baseline mypkg.methods:MyMethod
 
 # Aggregate a results file into a per-task/sector report:
 python -m scripts.report_benchmark results/my_run.jsonl
@@ -42,17 +54,18 @@ are skipped on restart, so an interrupted sweep continues where it left off.
 ### Python API
 
 ```python
-from afe.benchmark import compare, BaselineMethod, OpenFEMethod, CAFEMMethod
+from afe.benchmark import compare, BaselineMethod
+from mypkg.methods import MyMethod
 
 result = compare(
-    methods=[BaselineMethod, OpenFEMethod, CAFEMMethod],
+    methods=[BaselineMethod, MyMethod],
     datasets=["german-credit", "concrete-strength"],   # built-in suite keys
 )
 print(result)          # per-model-family markdown score table
 df = result.to_frame() # raw rows as a pandas DataFrame
 ```
 
-### Benchmarking your own method
+### Plugging in a method
 
 A method is either a **plain function**:
 
@@ -88,6 +101,72 @@ result = compare(
 ```
 
 Both dataset sources can be mixed in one call.
+
+### Benchmarking a third-party library
+
+Nothing about a competitor method is special — install it and write the same
+small adapter. The example below wraps
+[OpenFE](https://github.com/IIIS-Li-Group/OpenFE) (NeurIPS 2022) and is the
+exact code used to produce OpenFE's numbers in
+[`docs/benchmark_report.md`](docs/benchmark_report.md).
+
+```bash
+pip install openfe
+```
+
+```python
+# adapters/openfe_adapter.py
+import os, shutil, tempfile
+
+
+class _IsolatedCwd:
+    """openfe writes hardcoded relative temp files; give each call a fresh cwd."""
+    def __enter__(self):
+        self._prev = os.getcwd()
+        self._tmp = tempfile.mkdtemp(prefix="openfe_")
+        os.chdir(self._tmp)
+        return self
+
+    def __exit__(self, *exc):
+        os.chdir(self._prev)
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+
+class OpenFEMethod:
+    name = "openfe"
+
+    def __init__(self, n_new_features=10, n_jobs=1):
+        self.n_new_features, self.n_jobs = n_new_features, n_jobs
+
+    def fit_transform(self, X_train, y_train, task):
+        from openfe import OpenFE, transform
+        self._X_train = X_train
+        task_str = "regression" if task == "regression" else "classification"
+        with _IsolatedCwd():
+            ofe = OpenFE()
+            feats = ofe.fit(data=X_train, label=y_train, task=task_str,
+                            n_jobs=self.n_jobs, seed=0, verbose=False)
+            self._selected = feats[: self.n_new_features]
+            X_new, _ = transform(X_train, X_train, self._selected, n_jobs=self.n_jobs)
+        return X_new
+
+    def transform(self, X_test):
+        from openfe import transform
+        with _IsolatedCwd():
+            _, X_new = transform(self._X_train, X_test, self._selected,
+                                 n_jobs=self.n_jobs)
+        return X_new
+```
+
+```bash
+python -m scripts.run_benchmark --datasets german-credit \
+    --methods baseline adapters.openfe_adapter:OpenFEMethod --budget 300
+```
+
+The `_IsolatedCwd` wrapper is the one non-obvious part, and it generalizes:
+some libraries write temp files to hardcoded relative paths, which collide
+across runs. Isolating the working directory per call is a good default when
+adapting any library that touches disk.
 
 ### How a run works
 
@@ -157,7 +236,7 @@ memory.
 
 ```bash
 # Anything after `--` is passed straight through to run_benchmark.py:
-./scripts/benchmark_ctl.sh start -- --methods baseline openfe cafem --budget 900
+./scripts/benchmark_ctl.sh start -- --methods baseline mypkg.methods:MyMethod --budget 900
 ./scripts/benchmark_ctl.sh status     # running? + row/status counts so far
 ./scripts/benchmark_ctl.sh tail       # follow the log
 ./scripts/benchmark_ctl.sh stop       # kills the whole process group
@@ -171,7 +250,7 @@ All flags of `python -m scripts.run_benchmark`:
 | flag | default | meaning |
 |---|---|---|
 | `--datasets` | all 22, smallest-scale-first | benchmark keys to run — space-separated, e.g. `--datasets nomao covertype` |
-| `--methods` | `baseline` | which methods to benchmark — any of `baseline openfe cafem featuretools autofeat` |
+| `--methods` | `baseline` | methods to benchmark: the built-in `baseline`, and/or import paths to your own, e.g. `mypkg.methods:MyMethod`. A path may point at a class or a plain function |
 | `--models` | all three | which model families to score generated features with — any of `tree linear knn` |
 | `--budget` | `300` | per (dataset, method) **generation** time budget in seconds; a method exceeding it is killed and recorded as `status="timeout"` |
 | `--out` | `results/benchmark_results.jsonl` | output JSONL path |
@@ -195,15 +274,12 @@ closer-to-full-data runs and have the memory to spare.
 
 | method | class | what it does |
 |---|---|---|
-| `baseline` | `BaselineMethod` | No feature engineering — the raw (prepped) features. Every comparison should include it. |
-| `openfe` | `OpenFEMethod` | [OpenFE](https://github.com/IIIS-Li-Group/OpenFE) (NeurIPS 2022): full candidate expansion + two-stage boosting-based evaluation; keeps the top `n_new_features` (default 10). |
-| `cafem` | `CAFEMMethod` | CAFEM-style (PAKDD 2020) per-dataset RL: a Double DQN searches the Feature Transformation Graph on the training fold; the best-scoring transformation chain per feature is kept and replayed on test. |
-| `featuretools` | `FeaturetoolsMethod` | Single-table Deep Feature Synthesis (pairwise arithmetic primitives). |
-| `autofeat` | `AutofeatMethod` | Autofeat's iterative non-linear expansion + L1-based selection. |
+| `baseline` | `BaselineMethod` | No feature engineering — the raw (prepped) features. The reference arm every comparison is read against. |
 
-All are re-exported from `afe.benchmark` and follow the same
-`fit_transform`/`transform` contract, so your own method plugs in alongside
-them.
+That is the complete list. Everything else is supplied by you — see
+[Plugging in a method](#plugging-in-a-method) above and
+[Benchmarking a third-party library](#benchmarking-a-third-party-library)
+below.
 
 ### Available datasets
 
@@ -264,7 +340,7 @@ A failed/killed run still gets a row (`model_family`/`metric`/`value` are
 | field | meaning |
 |---|---|
 | `key` | dataset key |
-| `method` | method name (`baseline`, `openfe`, `cafem`, …) |
+| `method` | method name — `baseline`, or the import path / `.name` of a supplied method |
 | `fold_id`, `protocol` | which frozen split the row was scored on (`split0`, `holdout`) |
 | `task` | `classification`, `multiclass`, or `regression` |
 | `status` | `ok`, `timeout` (exceeded `--budget`), `oom` (exceeded `--max-mem-gb`), `crashed` (subprocess died), `error` (method raised), or `model_error` (scoring model raised) |
@@ -300,7 +376,10 @@ fold-means when a results file holds multiple folds per (dataset, method,
 model family).
 
 **Full worked example: [`docs/benchmark_report.md`](docs/benchmark_report.md)**
-(OpenFE vs. CAFEM across all 22 datasets). It contains:
+— OpenFE vs. a CAFEM-style RL method across all 22 datasets. Neither ships
+with this harness; both were plugged in as external methods exactly as
+described in [Benchmarking a third-party library](#benchmarking-a-third-party-library),
+which makes the report a working demonstration of that path. It contains:
 
 *Datasets* — the legend mapping each abbreviation to its full key, task,
 sector, and metric:

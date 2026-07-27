@@ -39,7 +39,7 @@ def feature_efficiency(X_base, X_gen, y_train, task: str) -> float | None:
     fold only -- it describes the generated features, it never influences
     selection or scoring.
     """
-    from ..meta.meta_features import _target_association
+    from .association import target_association
 
     base = set(map(str, X_base.columns))
     new_cols = [c for c in X_gen.columns if str(c) not in base]
@@ -51,7 +51,7 @@ def feature_efficiency(X_base, X_gen, y_train, task: str) -> float | None:
     else:
         yv = pd.factorize(y)[0].astype("float64")
     n_predictive = sum(
-        _target_association(np.asarray(X_gen[c], dtype="float64"), yv, task)
+        target_association(np.asarray(X_gen[c], dtype="float64"), yv, task)
         >= EFFICIENCY_THRESHOLD
         for c in new_cols
     )

@@ -5,16 +5,20 @@ its memory before moving to the next -- and is resumable (skips pairs
 already present in --out). Datasets are ordered smallest-scale-first by
 default.
 
+Only the no-op ``baseline`` method ships with the harness; every other method
+is your own, referenced by import path (``mypkg.methods:MyMethod``) and
+resolved at run time.
+
 Examples:
     python -m scripts.run_benchmark --datasets nomao concrete-strength \\
-        --methods baseline openfe --budget 300
+        --methods baseline mypkg.methods:MyMethod --budget 300
 
-    # everything
-    python -m scripts.run_benchmark --methods baseline openfe featuretools autofeat \\
-        --budget 300
+    # everything, against two of your own methods
+    python -m scripts.run_benchmark \\
+        --methods baseline mypkg:MethodA mypkg:MethodB --budget 300
 
     # only the tree model, to skip linear/knn scoring
-    python -m scripts.run_benchmark --methods baseline openfe --models tree
+    python -m scripts.run_benchmark --methods baseline mypkg:MyMethod --models tree
 """
 
 from __future__ import annotations
@@ -45,8 +49,10 @@ def main() -> int:
     parser.add_argument("--datasets", nargs="*", default=None,
                         help="benchmark keys to run (default: all 22, small-first)")
     parser.add_argument("--methods", nargs="*", default=["baseline"],
-                        choices=sorted(METHODS),
-                        help="which AutoFE methods to benchmark")
+                        metavar="METHOD",
+                        help="methods to benchmark: the built-in %s, and/or an "
+                             "import path to your own, e.g. "
+                             "'mypkg.methods:MyMethod'" % sorted(METHODS))
     parser.add_argument("--models", nargs="*", default=list(MODEL_FAMILIES),
                         choices=list(MODEL_FAMILIES),
                         help="which model families to evaluate generated features with")

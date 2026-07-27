@@ -1,31 +1,25 @@
-# Full environment: the harness, every dataset source, and every bundled
-# AutoFE method. For a lighter install, use pyproject.toml's extras instead:
-#   pip install -e .                 # core -- harness + baseline/openfe/cafem
-#   pip install -e ".[benchmark]"    # + dataset fetchers and the other methods
+# Full environment: the harness plus every built-in dataset source.
+# For a lighter install, use pyproject.toml's extras instead:
+#   pip install -e .                # core -- harness + your own methods/data
+#   pip install -e ".[datasets]"    # + fetchers for the built-in 22-dataset suite
 
 # Core data handling
 pandas>=2.0
 numpy>=1.24
-tqdm>=4.60
-pyarrow>=14.0            # parquet cache
-
-# Dataset sources
-# >=1.3 for sklearn.preprocessing.TargetEncoder; <1.6 because openfe 0.0.12
-# calls mean_squared_error(..., squared=False), removed in sklearn 1.6.
-scikit-learn>=1.3,<1.6   # sklearn built-ins + fetch_openml
-openml>=0.14             # OpenML suites (CC18 / CTR23 / AMLB) + datasets
-ucimlrepo>=0.0.7         # UCI datasets by name
-kaggle>=1.6              # Kaggle competition downloads (needs ~/.kaggle/kaggle.json)
+scikit-learn>=1.3        # sklearn built-ins + TargetEncoder + fetch_openml
 
 # Tree model in the 3-model scoring panel
 lightgbm>=4.0
 
-# AutoFE methods under benchmark
-openfe>=0.0.12
-featuretools>=1.31
-autofeat>=2.1
-matplotlib>=3.8          # openfe's FeatureSelector imports this at module load
-setuptools<81            # featuretools/woodwork still import pkg_resources
+# Built-in dataset sources
+pyarrow>=14.0            # parquet cache
+openml>=0.14             # OpenML suites (CC18 / CTR23 / AMLB) + datasets
+ucimlrepo>=0.0.7         # UCI datasets by name
+kaggle>=1.6              # Kaggle competition downloads (needs ~/.kaggle/kaggle.json)
 
 # Tests
 pytest>=7.4
+
+# NOTE: no AutoFE method library is required. The harness ships only the
+# no-op baseline; methods under test are supplied by you and bring their own
+# dependencies (e.g. `pip install openfe` if you want to benchmark OpenFE).
