@@ -28,7 +28,9 @@ from ..methods import (
     OpenFEMethod,
 )
 from ._compare import CompareResult, compare
-from .benchmark import DEFAULT_BUDGET_SECONDS, run_benchmark
+from .benchmark import (DEFAULT_BUDGET_SECONDS, DEFAULT_FIT_SAMPLE_ROWS,
+                        DEFAULT_MAX_COLS, DEFAULT_MAX_MEM_GB,
+                        DEFAULT_TRANSFORM_CHUNK_ROWS, run_benchmark)
 from .download import load
 from .eval_data import iter_folds
 from .registry import (
@@ -50,6 +52,10 @@ __all__ = [
     "CAFEMMethod",
     "CompareResult",
     "DEFAULT_BUDGET_SECONDS",
+    "DEFAULT_FIT_SAMPLE_ROWS",
+    "DEFAULT_MAX_COLS",
+    "DEFAULT_MAX_MEM_GB",
+    "DEFAULT_TRANSFORM_CHUNK_ROWS",
     "DatasetSpec",
     "FeaturetoolsMethod",
     "OpenFEMethod",

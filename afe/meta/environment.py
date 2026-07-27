@@ -67,12 +67,17 @@ class FTGEnvironment:
         self._cache: dict[str, float] = {}
         self.transitions: list[Transition] = []
 
-        X = dataset.X.to_numpy(dtype="float64")
-        y = dataset.y
         # Subsample rows once so every fit in this dataset is cheap + comparable.
-        if len(X) > eval_rows:
-            idx = self._rng.choice(len(X), size=eval_rows, replace=False)
-            X, y = X[idx], y[idx]
+        # Slice the DataFrame *before* densifying: densifying first would
+        # transiently materialize a dense copy of the full (unsampled) fold.
+        n = len(dataset.X)
+        if n > eval_rows:
+            idx = self._rng.choice(n, size=eval_rows, replace=False)
+            X = dataset.X.iloc[idx].to_numpy(dtype="float64")
+            y = dataset.y[idx]
+        else:
+            X = dataset.X.to_numpy(dtype="float64")
+            y = dataset.y
         # Cap the base feature set: every wrapper fit carries all base columns,
         # so a wide table (e.g. 216 cols) makes each of the hundreds of fits
         # per dataset expensive. Keep the columns most associated with the

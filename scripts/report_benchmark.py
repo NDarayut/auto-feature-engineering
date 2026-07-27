@@ -1,8 +1,17 @@
-"""Aggregate afe.benchmark's JSONL results into the draft_plan Sec. 6 report
-structure: split by task type -> sector -> aggregate overall, each row shows
-baseline vs method with the point delta on the single fixed-seed split
-(draft_plan Sec. 5.3 -- one estimate per (dataset, method, model), not a
-distribution, so no mean/std/significance marker is computed).
+"""Aggregate afe.benchmark's JSONL results into three markdown tables:
+
+1. **Overview** -- one row per method, one column per dataset; the cell is
+   the mean of the three model-family scores (each family's score first
+   averaged over folds), so a method's overall usefulness on a dataset is
+   one number.
+2. **Per-method scores** -- the breakdown behind the overview: a ``method``
+   column grouping three ``model`` rows (tree/linear/knn), one column per
+   dataset, cell = fold-mean metric value for that (method, family, dataset).
+3. **Speed** -- one row per method, one column per dataset, cell = fold-mean
+   feature-generation wall-time, plus a per-method median column.
+
+Dataset columns use abbreviations (initials of the hyphen-separated key);
+a legend up top maps each abbreviation to the full key, task, and metric.
 
 Failure rows (status != "ok") are counted and reported, not dropped
 (draft_plan Sec. 6).
@@ -16,10 +25,7 @@ import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
-
-from afe.benchmark.registry import BENCHMARK
-
-_SECTOR = {s.key: s.sector for s in BENCHMARK}
+from statistics import mean, median
 
 
 def load_rows(path: Path) -> list[dict]:
@@ -32,63 +38,143 @@ def load_rows(path: Path) -> list[dict]:
     return rows
 
 
+def _abbreviate(keys: list[str]) -> dict[str, str]:
+    """dataset key -> short column label (initials of hyphenated words).
+
+    ``california-housing`` -> ``CH``; collisions get a numeric suffix so
+    every column label stays unique regardless of which keys are present.
+    """
+    abbrevs: dict[str, str] = {}
+    used: set[str] = set()
+    for key in keys:
+        base = "".join(w[0] for w in key.split("-")).upper()
+        label, i = base, 2
+        while label in used:
+            label, i = f"{base}{i}", i + 1
+        abbrevs[key] = label
+        used.add(label)
+    return abbrevs
+
+
+def _fmt_score(v: float) -> str:
+    # A diverged model (e.g. a linear fit on an exploded feature) can produce
+    # an astronomically negative R^2; scientific notation keeps the table
+    # readable instead of printing a 20-digit cell.
+    return f"{v:.2e}" if abs(v) >= 1000 else f"{v:.3f}"
+
+
+def _fmt_seconds(s: float) -> str:
+    if s >= 120:
+        return f"{s / 60:.1f} min"
+    return f"{s:.1f} s"
+
+
+def _method_order(methods: set[str]) -> list[str]:
+    # baseline first -- it is the reference every other method is read against.
+    return (["baseline"] if "baseline" in methods else []) + sorted(methods - {"baseline"})
+
+
 def build_report(rows: list[dict]) -> str:
     ok_rows = [r for r in rows if r.get("status") == "ok" and r.get("value") is not None]
     fail_rows = [r for r in rows if r.get("status") != "ok"]
 
-    # group: (dataset, method, model_family) -> value (one point estimate)
-    grouped: dict[tuple, float] = {}
+    # Fold-mean per (dataset, method, family) -- files may hold one row per
+    # fold (cv5/seed_repeat5 protocols); collapsing by mean first makes every
+    # downstream cell a fold-mean rather than an arbitrary fold's value.
+    values: dict[tuple, list[float]] = defaultdict(list)
+    times: dict[tuple, list[float]] = defaultdict(list)
     task_of: dict[str, str] = {}
+    metric_of: dict[str, str] = {}
     for r in ok_rows:
-        grouped[(r["key"], r["method"], r["model_family"])] = r["value"]
-        task_of[r["key"]] = r["task"]
+        values[(r["key"], r["method"], r["model_family"])].append(r["value"])
+        if r.get("gen_elapsed_s") is not None:
+            times[(r["key"], r["method"])].append(r["gen_elapsed_s"])
+        task_of[r["key"]] = r.get("task", "?")
+        if r.get("metric"):
+            metric_of[r["key"]] = r["metric"]
+    score: dict[tuple, float] = {k: mean(v) for k, v in values.items()}
+    gen_s: dict[tuple, float] = {k: mean(v) for k, v in times.items()}
 
-    datasets = sorted({k for k, _, _ in grouped})
-    methods = sorted({m for _, m, _ in grouped} - {"baseline"})
-    families = sorted({f for _, _, f in grouped})
+    datasets = sorted({k for k, _, _ in score})
+    methods = _method_order({m for _, m, _ in score})
+    families = sorted({f for _, _, f in score})
+    abbrev = _abbreviate(datasets)
 
     lines = ["# Benchmark Report", ""]
-    for task in sorted({task_of[k] for k in datasets}):
-        lines.append(f"## Task: {task}")
-        by_sector: dict[str, list[str]] = defaultdict(list)
-        for key in datasets:
-            if task_of[key] != task:
-                continue
-            by_sector[_SECTOR.get(key, "unknown")].append(key)
 
-        for sector, keys in sorted(by_sector.items()):
-            lines.append(f"### Sector: {sector}")
-            lines.append("")
-            lines.append("| dataset | model | baseline | " +
-                        " | ".join(methods) + " |")
-            lines.append("|---|---|---|" + "---|" * len(methods))
-            for key in sorted(keys):
-                for family in families:
-                    base_val = grouped.get((key, "baseline", family))
-                    if base_val is None:
-                        continue
-                    cells = [f"{base_val:.3f}"]
-                    for method in methods:
-                        val = grouped.get((key, method, family))
-                        if val is None:
-                            cells.append("—")
-                            continue
-                        delta = val - base_val
-                        sign = "+" if delta >= 0 else ""
-                        cells.append(f"{val:.3f} ({sign}{delta:.3f})")
-                    lines.append(f"| {key} | {family} | " + " | ".join(cells) + " |")
-            lines.append("")
-
-    lines.append("## Failures / timeouts / crashes")
+    # -- legend ------------------------------------------------------------
+    lines += ["## Datasets", "",
+              "| abbrev | dataset | task | metric |", "|---|---|---|---|"]
+    for key in datasets:
+        lines.append(f"| {abbrev[key]} | {key} | {task_of.get(key, '?')} "
+                     f"| {metric_of.get(key, '?')} |")
     lines.append("")
+
+    # -- table 1: overview -------------------------------------------------
+    def _overview_cell(method: str, key: str) -> float | None:
+        vals = [score[(key, method, f)] for f in families if (key, method, f) in score]
+        return mean(vals) if vals else None
+
+    lines += ["## Overview", "",
+              "Mean held-out score across the three model families "
+              "(per-family scores are fold-means; metrics differ per dataset "
+              "-- see the legend).", "",
+              "| method | " + " | ".join(abbrev[k] for k in datasets) + " |",
+              "|---|" + "---|" * len(datasets)]
+    best = {k: max((v for m in methods if (v := _overview_cell(m, k)) is not None),
+                   default=None) for k in datasets}
+    for method in methods:
+        cells = []
+        for key in datasets:
+            val = _overview_cell(method, key)
+            if val is None:
+                cells.append("—")
+            else:
+                cells.append(f"**{_fmt_score(val)}**" if val == best[key]
+                             else _fmt_score(val))
+        lines.append(f"| {method} | " + " | ".join(cells) + " |")
+    lines.append("")
+
+    # -- table 2: per-method breakdown ------------------------------------
+    lines += ["## Per-method scores", "",
+              "| method | model | " + " | ".join(abbrev[k] for k in datasets) + " |",
+              "|---|---|" + "---|" * len(datasets)]
+    for method in methods:
+        for i, family in enumerate(families):
+            cells = []
+            for key in datasets:
+                val = score.get((key, method, family))
+                cells.append(_fmt_score(val) if val is not None else "—")
+            label = method if i == 0 else ""
+            lines.append(f"| {label} | {family} | " + " | ".join(cells) + " |")
+    lines.append("")
+
+    # -- table 3: speed ----------------------------------------------------
+    lines += ["## Speed (feature-generation wall-time)", "",
+              "| method | " + " | ".join(abbrev[k] for k in datasets) + " | median |",
+              "|---|" + "---|" * (len(datasets) + 1)]
+    for method in methods:
+        cells, method_times = [], []
+        for key in datasets:
+            t = gen_s.get((key, method))
+            if t is None:
+                cells.append("—")
+            else:
+                cells.append(_fmt_seconds(t))
+                method_times.append(t)
+        med = _fmt_seconds(median(method_times)) if method_times else "—"
+        lines.append(f"| {method} | " + " | ".join(cells) + f" | {med} |")
+    lines.append("")
+
+    # -- failures ----------------------------------------------------------
+    lines += ["## Failures / timeouts / crashes", ""]
     if not fail_rows:
         lines.append("(none)")
     else:
-        by_status: dict[str, int] = defaultdict(int)
+        by_status: dict[tuple[str, str, str], int] = defaultdict(int)
         for r in fail_rows:
             by_status[(r["key"], r["method"], r["status"])] += 1
-        lines.append("| dataset | method | status | count |")
-        lines.append("|---|---|---|---|")
+        lines += ["| dataset | method | status | count |", "|---|---|---|---|"]
         for (key, method, status), count in sorted(by_status.items()):
             lines.append(f"| {key} | {method} | {status} | {count} |")
 

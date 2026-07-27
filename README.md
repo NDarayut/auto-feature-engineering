@@ -1,93 +1,60 @@
-# MF-OpenFE
+# AutoFE Benchmark
 
-Automatic feature engineering with a meta-learned filter, plus a **modular,
-algorithm-agnostic benchmark harness** for comparing any AutoFE method
-fairly on a frozen dataset suite.
-
-- **`afe.MFOpenFE`** — generate candidate features with
-  [OpenFE](https://github.com/IIIS-Li-Group/OpenFE)'s operator library, prune
-  the pool with a meta-model trained offline on ~100 historical datasets,
-  then verify and keep only the features that measurably help.
-- **`afe.benchmark`** — a plug-and-play benchmark: bring any AutoFE method
-  (a plain function or a small class — yours, ours, or a third-party
-  library's), and it is evaluated on identical frozen splits, with an
-  identical model panel and metrics, alongside any other method.
-
-```python
-from afe import MFOpenFE
-
-mfe = MFOpenFE(task="classification")
-X_train_fe = mfe.fit_transform(X_train, y_train)
-X_test_fe = mfe.transform(X_test)
-```
-
----
+A modular, algorithm-agnostic benchmark harness for comparing automatic
+feature engineering (AutoFE) methods fairly: every method runs on identical
+frozen train/test splits, receives identically preprocessed data, and is
+scored by the same downstream model panel. Failures (timeouts, crashes,
+out-of-memory) are recorded as result rows, never silently dropped.
 
 ## Contents
 
 - [Installation](#installation)
-- [Quickstart: MF-OpenFE](#quickstart-mf-openfe)
-- [The benchmark](#the-benchmark)
-  - [Quick example](#quick-example)
-  - [Plugging in your own method](#plugging-in-your-own-method)
-  - [Built-in methods](#built-in-methods)
-  - [How methods are benchmarked](#how-methods-are-benchmarked)
-  - [Metrics](#metrics)
-  - [Running from the command line](#running-from-the-command-line)
-  - [Benchmark datasets](#benchmark-datasets)
-  - [Results: OpenFE vs. CAFEM](#results-openfe-vs-cafem)
-- [How MF-OpenFE works](#how-mf-openfe-works)
-- [Training your own meta-model](#training-your-own-meta-model)
-- [Project layout](#project-layout)
-
----
+- [Usage](#usage)
+  - [Command line](#command-line)
+  - [Python API](#python-api)
+  - [Benchmarking your own method](#benchmarking-your-own-method)
+- [Parameters](#parameters)
+- [Available methods](#available-methods)
+- [Available datasets](#available-datasets)
+- [Output](#output)
 
 ## Installation
 
 ```bash
 git clone <this-repo> && cd auto-feature-engineering
 python -m venv .venv && . .venv/bin/activate
-pip install -e .                  # just MFOpenFE (pandas, numpy, sklearn, openfe, lightgbm)
-pip install -e ".[benchmark]"     # + the benchmark harness (openml, ucimlrepo, kaggle, ...)
+pip install -e ".[benchmark]"      # harness + dataset fetchers (openml, ucimlrepo, kaggle, ...)
 pip install -e ".[benchmark,test]" # + pytest
 ```
 
-Python 3.10+ (developed on 3.12). To download the benchmark datasets, see
-[`docs/dataset_setup.md`](docs/dataset_setup.md) — most fetch automatically,
-four need Kaggle credentials, three need a one-time manual drop.
+Python 3.10+ (developed on 3.12). Most datasets download automatically on
+first use and are cached under `data/cache/`; a few need Kaggle credentials
+or a one-time manual drop — see [`docs/dataset_setup.md`](docs/dataset_setup.md).
 
-## Quickstart: MF-OpenFE
+## Usage
 
-```python
-from sklearn.datasets import load_breast_cancer
-from sklearn.model_selection import train_test_split
-from afe import MFOpenFE
+### Command line
 
-X, y = load_breast_cancer(as_frame=True, return_X_y=True)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
+```bash
+# Compare methods on chosen datasets, 900s generation budget per (dataset, method):
+python -m scripts.run_benchmark \
+    --datasets german-credit concrete-strength house-prices \
+    --methods baseline openfe cafem \
+    --budget 900 --out results/my_run.jsonl
 
-mfe = MFOpenFE(task="classification")
-X_train_fe = mfe.fit_transform(X_train, y_train)   # fit only ever touches train
-X_test_fe = mfe.transform(X_test)                  # replays the same kept features
+# Everything: all 22 datasets (smallest first), resumable if interrupted:
+python -m scripts.run_benchmark --methods baseline openfe cafem featuretools autofeat
 
-print(f"{X_train.shape[1]} raw -> {X_train_fe.shape[1]} engineered "
-      f"({mfe.n_features_kept_} kept of {mfe.n_candidates_generated_} generated)")
+# Aggregate a results file into a per-task/sector report:
+python -m scripts.report_benchmark results/my_run.jsonl
 ```
 
-`task` is optional (inferred from `y`); categoricals need no manual encoding.
-Progress reporting is on by default (`progress=False` to silence).
+Runs are **resumable**: (dataset, method) pairs already present in `--out`
+are skipped on restart, so an interrupted sweep continues where it left off.
+For long unattended runs there is a supervised background runner —
+[`docs/benchmark_ctl_usage.md`](docs/benchmark_ctl_usage.md).
 
----
-
-## The benchmark
-
-`afe.benchmark` is deliberately **standalone and symmetric**: it has no
-privileged notion of "our method" vs. "their method". Every method — including
-MF-OpenFE itself — enters through the same interface, runs on the same frozen
-split, and is scored by the same model panel. You can use it to benchmark any
-automatic feature engineering technique without editing library source.
-
-### Quick example
+### Python API
 
 ```python
 from afe.benchmark import compare, BaselineMethod, OpenFEMethod, CAFEMMethod
@@ -100,18 +67,7 @@ print(result)          # per-model-family markdown score table
 df = result.to_frame() # raw rows as a pandas DataFrame
 ```
 
-Output (illustrative):
-
-```
-## tree
-| dataset | baseline | cafem | openfe |
-|---|---|---|---|
-| concrete-strength | 0.938 | 0.940 | 0.947 |
-| german-credit | 0.829 | 0.830 | 0.841 |
-| **mean** | 0.884 | 0.885 | 0.894 |
-```
-
-### Plugging in your own method
+### Benchmarking your own method
 
 A method is either a **plain function**:
 
@@ -121,8 +77,8 @@ def my_method(X_train, y_train, X_test, task):
     return X_train_new, X_test_new        # original + engineered columns
 ```
 
-or a **class** with the `fit_transform`/`transform` contract (this is
-`afe.methods.AutoFEMethod`, a structural protocol — no inheritance needed):
+or a **class** with the `fit_transform`/`transform` contract (a structural
+protocol — no inheritance needed):
 
 ```python
 class MyMethod:
@@ -146,15 +102,61 @@ result = compare(
 )
 ```
 
-Both dataset sources can be mixed in one call. `budget_seconds=None` (the
-default) runs in-process — works from a notebook or REPL; setting it opts
-into subprocess isolation with a hard wall-clock budget per (dataset, method)
-pair, which requires the method to be picklable/importable. Full API
-reference: [`afe/benchmark/README.md`](afe/benchmark/README.md).
+Both dataset sources can be mixed in one call. Full API reference:
+[`afe/benchmark/README.md`](afe/benchmark/README.md).
 
-### Built-in methods
+### How a run works
 
-All re-exported from `afe.benchmark`, all following the same contract:
+For each dataset, the harness:
+
+1. computes a single **frozen 80/20 train/test split** (seeded
+   deterministically from the dataset key — same split on every machine, in
+   every run, for every method);
+2. applies **uniform preprocessing** (categoricals ordinal-encoded, numerics
+   median-imputed, fit on the training fold only) so every method receives
+   the identical numeric, NaN-free matrix;
+3. runs each method's **feature generation in an isolated subprocess** under
+   a wall-clock budget and a hard memory cap — a method that runs too long,
+   crashes, or exhausts memory becomes a `timeout`/`crashed`/`oom` result
+   row while the sweep continues;
+4. scores the engineered features with a **3-family model panel** — LightGBM
+   (`tree`), Logistic Regression / Ridge (`linear`), and kNN (`knn`) — since
+   a feature set that helps all three families is genuinely better
+   representation, not a model-specific artifact;
+5. writes **one JSONL row per (dataset, method, model family)** as it is
+   produced.
+
+Metrics: ROC AUC for binary classification, macro one-vs-rest ROC AUC for
+multiclass, R² (plus MAE) for regression.
+
+## Parameters
+
+All flags of `python -m scripts.run_benchmark`:
+
+| flag | default | meaning |
+|---|---|---|
+| `--datasets` | all 22, smallest-scale-first | benchmark keys to run — space-separated, e.g. `--datasets nomao covertype` (see [Available datasets](#available-datasets)) |
+| `--methods` | `baseline` | which methods to benchmark — any of `baseline openfe cafem featuretools autofeat` |
+| `--models` | all three | which model families to score generated features with — any of `tree linear knn` |
+| `--budget` | `300` | per (dataset, method) **generation** time budget in seconds; a method exceeding it is killed and recorded as `status="timeout"` |
+| `--out` | `results/benchmark_results.jsonl` | output JSONL path |
+| `--no-resume` | off | re-run pairs even if already present in `--out` (default is to skip pairs already completed there) |
+| `--max-cols` | `200` | cap a dataset to its N most target-associated columns before any method runs — a generic guard against any method's candidate-generation cost blowing up on very wide datasets; `0` disables |
+| `--fit-sample-rows` | `20000` | cap the row count a method's *fit* step sees to a random sample of this size (the full fold is still used for scoring — see `--transform-chunk-rows`); `0` disables |
+| `--transform-chunk-rows` | `20000` | apply a fitted method's *transform* in row chunks of this size instead of on the whole fold at once, bounding peak memory while building the final feature matrix; `0` disables |
+| `--max-mem-gb` | `16.0` | hard memory ceiling (via `RLIMIT_AS`) for each method's generation subprocess, as a safety net for whatever the caps above don't catch — an over-limit run is killed and recorded as `status="oom"` rather than risking the host; `0` disables |
+
+The last four flags exist because a method's internal algorithm (candidate
+search, RL rollout, DFS, …) can scale combinatorially with a dataset's row
+or column count — they apply identically regardless of which `--methods` you
+pick, so a large/wide dataset that would otherwise run out of memory now
+degrades gracefully to a smaller effective sample and a bounded-memory
+failure instead of crashing the machine. Defaults are tuned for a large-ish
+workstation (dozens of GB free); lower `--max-mem-gb` (and/or
+`--fit-sample-rows`) on a smaller machine, or raise them if you want
+closer-to-full-data runs and have the memory to spare.
+
+## Available methods
 
 | method | class | what it does |
 |---|---|---|
@@ -163,218 +165,151 @@ All re-exported from `afe.benchmark`, all following the same contract:
 | `cafem` | `CAFEMMethod` | CAFEM-style (PAKDD 2020) per-dataset RL: a Double DQN searches the Feature Transformation Graph on the training fold; the best-scoring transformation chain per feature is kept and replayed on test. |
 | `featuretools` | `FeaturetoolsMethod` | Single-table Deep Feature Synthesis (pairwise arithmetic primitives). |
 | `autofeat` | `AutofeatMethod` | Autofeat's iterative non-linear expansion + L1-based selection. |
-| — | `afe.MFOpenFE` | This project's method; pass it in `methods=` like any other. |
 
-### How methods are benchmarked
+All are re-exported from `afe.benchmark` and follow the same
+`fit_transform`/`transform` contract, so your own method plugs in alongside
+them (see [Benchmarking your own method](#benchmarking-your-own-method)).
 
-The harness holds everything except the method constant, so score differences
-reflect the method — not the split, the preprocessing, or the downstream model:
+## Available datasets
 
-1. **Frozen split.** Each dataset gets a single fixed 80/20 train/test holdout
-   (stratified for classification). The seed is derived deterministically from
-   the dataset key (`SHA256(key)`, offset `20260101`) using NumPy's
-   stability-guaranteed legacy RNG, so *same dataset ⇒ same split*, on any
-   machine, in every run, for every method.
-2. **Uniform preprocessing.** Before any method sees the data: categoricals
-   are ordinal-encoded and numerics median-imputed, **fit on the training fold
-   only**. Every method receives the identical numeric, NaN-free matrix, so no
-   method gains an advantage from its own dtype handling.
-3. **Leak-safety contract.** `fit_transform` only ever receives the training
-   fold; `transform` replays fitted state on the test fold. The harness never
-   passes test rows to a fitting step.
-4. **Generation under budget (opt-in).** With a budget set, feature generation
-   runs in a spawned subprocess with a hard wall-clock limit. Methods that
-   exceed it are killed and recorded as `timeout`; crashes are recorded as
-   `error`. **Failures are rows in the results, not silent exclusions.**
-5. **A 3-family model panel.** The engineered features are evaluated with
-   three deliberately different downstream learners, per task:
+The frozen suite has **22 datasets** covering both task types, small through
+large scale, and a spread of sectors. The registry
+(`afe/benchmark/registry.py`) is the source of truth; download instructions:
+[`docs/dataset_setup.md`](docs/dataset_setup.md). The metric is chosen by
+the harness from the data: `r2` (+ `mae`) for regression, `auc` for binary
+classification, macro one-vs-rest `auc_ovr` when there are more than two
+classes.
 
-   | family | classifier | regressor | post-generation prep |
-   |---|---|---|---|
-   | `tree` | LightGBM (200 trees) | LightGBM (200 trees) | ±inf → NaN (LightGBM handles NaN natively) |
-   | `linear` | Logistic Regression | Ridge | median-impute + standard-scale, fit on train |
-   | `knn` | kNN (k=10) | kNN (k=10) | median-impute + standard-scale, fit on train |
+| key | task | metric | rows | features | classes |
+|---|---|---|---:|---:|---:|
+| california-housing | regression | r2 | 20 640 | 8 | — |
+| microsoft-mslr | regression | r2 | 723 412 | 136 | — |
+| medical | regression | r2 | 104 361 | 5 | — |
+| superconductivity | regression | r2 | 21 263 | 81 | — |
+| concrete-strength | regression | r2 | 1 030 | 8 | — |
+| house-prices | regression | r2 | 1 460 | 80 | — |
+| diabetes-130us | classification | auc_ovr | 101 766 | 49 | 3 |
+| nomao | classification | auc | 34 465 | 118 | 2 |
+| vehicle-sensit | classification | auc_ovr | 98 528 | 100 | 3 |
+| broken-machine | classification | auc | 576 000 | 58 | 2 |
+| telecom-churn | classification | auc | 7 043 | 19 | 2 |
+| jannis | classification | auc_ovr | 83 733 | 54 | 4 |
+| covertype | multiclass | auc_ovr | 110 393 | 54 | 7 |
+| ieee-cis-fraud | classification | auc | 590 540 | 393 | 2 |
+| bnp-paribas-claims | classification | auc | 114 321 | 132 | 2 |
+| home-credit-default | classification | auc | 307 511 | 121 | 2 |
+| german-credit | classification | auc | 1 000 | 20 | 2 |
+| heart-disease | classification | auc_ovr | 303 | 13 | 5 |
+| breast-cancer-wisconsin | classification | auc | 569 | 30 | 2 |
+| qsar-biodegradation | classification | auc | 1 055 | 41 | 2 |
+| bank-marketing | classification | auc | 45 211 | 16 | 2 |
+| electricity | classification | auc | 45 312 | 8 | 2 |
 
-   A feature set that only helps one model family is a model-specific artifact;
-   one that helps all three is genuinely better representation. (Because kNN
-   prediction cost is O(n_train × n_test), the kNN family fits on at most
-   50 000 seeded-subsample train rows and scores at most 20 000 test rows —
-   identically for every method on a dataset, so comparisons are unaffected.)
-6. **One row per (dataset, method, model family)** is written to JSONL as it
-   is produced: metric value, generation wall-time, feature counts, and
-   status. Runs are resumable — completed pairs are skipped on restart.
+Row/feature/class counts are measured from the cached tables (features =
+columns excluding the target).
 
-### Metrics
+Splits and OpenML versions are pinned in committed manifests
+(`afe/benchmark/manifests/`), so every machine evaluates the same tables on
+the same splits.
 
-| task | primary metric | notes |
-|---|---|---|
-| binary classification | **ROC AUC** | threshold-free, robust to class imbalance |
-| multiclass classification | **macro one-vs-rest ROC AUC** | reported as `auc_ovr` |
-| regression | **R²** | + **MAE** recorded as a secondary, scale-aware metric |
+## Output
 
-Beyond the predictive metric, each result row records the full evaluation
-criteria from the benchmark plan ([`draft_plan.md`](draft_plan.md) §3.2/§5.2):
+`--out` is a JSONL file, one row per (dataset, method, model family),
+flushed as each row is produced. A successful row looks like:
 
-| field | criterion |
+```json
+{"key": "nomao", "method": "cafem", "fold_id": "split0", "protocol": "holdout", "task": "classification", "status": "ok", "gen_elapsed_s": 11.10, "fit_elapsed_s": 11.01, "transform_elapsed_s": 0.09, "peak_mem_mb": 564.7, "n_candidates": 8, "feature_efficiency": 1.0, "model_family": "tree", "n_features_generated": 8, "n_features_final": 126, "metric": "auc", "value": 0.9941}
+```
+
+A failed/killed run still gets a row (`model_family`/`metric`/`value` are
+`null`) instead of being silently dropped:
+
+```json
+{"key": "ieee-cis-fraud", "method": "openfe", "fold_id": "split0", "protocol": "holdout", "task": "classification", "status": "oom", "gen_elapsed_s": null, "model_family": null, "metric": null, "value": null, "error": "MemoryError under 16.0 GB RLIMIT_AS cap"}
+```
+
+### Row fields
+
+| field | meaning |
 |---|---|
-| `fit_elapsed_s`, `transform_elapsed_s`, `gen_elapsed_s` | generation cost and inference-time cost of computing the features on new data |
+| `key` | dataset key (see [Available datasets](#available-datasets)) |
+| `method` | method name (`baseline`, `openfe`, `cafem`, …) |
+| `fold_id`, `protocol` | which frozen split the row was scored on (`split0`, `holdout`) |
+| `task` | `classification`, `multiclass`, or `regression` |
+| `status` | `ok`, `timeout` (exceeded `--budget`), `oom` (exceeded `--max-mem-gb`), `crashed` (subprocess died), `error` (method raised), or `model_error` (scoring model raised) |
+| `metric`, `value` | primary metric name and held-out score — `auc`, `auc_ovr`, or `r2` |
+| `model_family` | which panel model produced the score — `tree`, `linear`, or `knn` |
+| `gen_elapsed_s`, `fit_elapsed_s`, `transform_elapsed_s` | total generation wall-time, and its fit / transform components |
 | `peak_mem_mb` | peak memory of the generation subprocess |
 | `n_candidates` | features surviving the method's *own* internal selection |
-| `n_features_generated`, `n_features_final` | feature yield actually added / total |
+| `n_features_generated`, `n_features_final` | new features actually added / total feature count after generation |
 | `feature_efficiency` | fraction of newly generated features that are individually predictive (univariate target association ≥ 0.1 on the train fold) — "many features that are also *good*", not just many features |
+| `error` | error message for failed rows, `null` otherwise |
 
-A method is preferred only if it improves performance *per compute budget*
-over the baseline, not merely if it adds volume.
-
-### Running from the command line
-
-```bash
-# Compare methods on chosen datasets, 900s generation budget each:
-python -m scripts.run_benchmark \
-    --datasets german-credit concrete-strength house-prices \
-    --methods baseline openfe cafem \
-    --budget 900 --out results/my_run.jsonl
-
-# Everything (all 22 datasets, smallest first), resumable:
-python -m scripts.run_benchmark --methods baseline openfe cafem
-
-# Aggregate a results file into a task/sector report:
-python -m scripts.report_benchmark results/my_run.jsonl
-```
-
-For long runs there is a supervised background runner —
-[`docs/benchmark_ctl_usage.md`](docs/benchmark_ctl_usage.md).
-
-### Benchmark datasets
-
-The frozen suite has **22 datasets** chosen to cover both task types, small
-through large scale, and a spread of sectors; 10 (marked ✓) are reused from
-the OpenFE paper for parity with its published results. The registry
-(`afe/benchmark/registry.py`) is the source of truth; download instructions:
-[`docs/dataset_setup.md`](docs/dataset_setup.md).
-
-| key | task | sector | scale | source | OpenFE paper |
-|---|---|---|---|---|:--:|
-| california-housing | regression | real estate | medium | sklearn | ✓ |
-| microsoft-mslr | regression | web ranking | large | OpenFE_reproduce | ✓ |
-| medical | regression | healthcare | medium | OpenFE_reproduce | ✓ |
-| superconductivity | regression | materials | medium | UCI | |
-| concrete-strength | regression | materials | small | UCI | |
-| house-prices | regression | real estate | medium | Kaggle | |
-| diabetes-130us | classification | healthcare | large | OpenML | ✓ |
-| nomao | classification | general | medium | OpenML | ✓ |
-| vehicle-sensit | classification | sensors | medium | OpenML | ✓ |
-| broken-machine | classification | industrial | large | OpenFE_reproduce | ✓ |
-| telecom-churn | classification | telco | medium | OpenML | ✓ |
-| jannis | classification | general | medium | OpenML | ✓ |
-| covertype | multiclass | environment | large | OpenML | ✓ |
-| ieee-cis-fraud | classification | finance | large | Kaggle | |
-| bnp-paribas-claims | classification | finance | medium | Kaggle | |
-| home-credit-default | classification | finance | large | Kaggle | |
-| german-credit | classification | finance | small | UCI | |
-| heart-disease | classification | healthcare | small | UCI | |
-| breast-cancer-wisconsin | classification | healthcare | small | sklearn | |
-| qsar-biodegradation | classification | chemistry | small | OpenML | |
-| bank-marketing | classification | finance | medium | OpenML | |
-| electricity | classification | energy | medium | OpenML | |
-
-Two hard rules keep results honest:
-
-- **Frozen manifests.** The suite and its split protocol are committed
-  (`afe/benchmark/manifests/`); OpenML versions are pinned, so every machine
-  evaluates the same tables on the same splits.
-- **Benchmark ∩ meta-training corpus = ∅.** MF-OpenFE's meta-model is trained
-  on a separate ~100-dataset OpenML corpus, and the manifest builder removes
-  every benchmark dataset (and its aliases) from that corpus — no method is
-  ever graded on data it was trained on. Enforced by `tests/test_disjoint.py`.
-
-### Results: OpenFE vs. CAFEM
-
-Baseline vs. OpenFE vs. CAFEM on the 10 small/medium suite datasets
-(900 s budget, no timeouts, 90/90 cells completed). Mean held-out score per
-model family (AUC / R² mixed — directional only; per-dataset tables and
-discussion in [`docs/benchmark_results.md`](docs/benchmark_results.md)):
-
-| model family | baseline | openfe | cafem |
-|---|---|---|---|
-| tree (LightGBM) | **0.867** | 0.860 | **0.867** |
-| linear | 0.666 | **0.713** | 0.685 |
-| knn | 0.807 | **0.818** | 0.807 |
-| median generation time | 0 s | 31.6 s | 1.0 s |
-
-In short: OpenFE clearly helps linear/kNN models (+0.047 mean on linear) but
-does not reliably beat raw features under LightGBM; CAFEM's unary-chain
-search is ~30× cheaper and near-harmless by construction (it keeps nothing
-when nothing helps), but rarely finds large wins.
-
----
-
-## How MF-OpenFE works
-
-One `fit_transform` call runs four steps:
-
-1. **Generate** — `openfe.get_candidate_features()` builds the candidate pool
-   using OpenFE's operator library (arithmetic combinations, groupby
-   aggregations, `log`/`sqrt`/`square`/`sigmoid`/…).
-2. **Meta-filter** — each candidate is scored by a model trained offline on a
-   ~100-dataset corpus: given the feature's scale-invariant distributional
-   sketch and the operator applied, predict whether it is worth evaluating.
-   Candidates below the threshold are dropped before any expensive evaluation.
-   (Currently covers `log`/`sqrt`/`square`/`sigmoid` candidates; operators
-   without training signal pass through unfiltered rather than being guessed
-   at. Held-out corpus AUC: 0.80 against a 13% base rate.)
-3. **Verify + select** — survivors are added to the raw features, one LightGBM
-   fit ranks them by importance, and low-importance candidates are dropped.
-4. **Replay** — `transform` applies exactly the kept features to new data.
-
-The full staged design and each technique's source paper:
-[`algorithm_plan.md`](algorithm_plan.md).
+### Working with results
 
 ```python
-MFOpenFE(
-    task="regression",          # inferred from y if omitted
-    order=1,                    # OpenFE candidate-generation order
-    filter_threshold=0.5,       # min meta-model score to survive the filter
-    max_candidates=100,         # cap on candidates reaching verify/select
-    importance_threshold=0.0,   # min LightGBM importance to be kept
-    progress=True,
-)
+import pandas as pd
+
+df = pd.read_json("results/my_run.jsonl", lines=True)
+df.groupby(["method", "model_family"])["value"].mean()
 ```
 
-## Training your own meta-model
-
-The shipped meta-model is trained in two offline steps — a CAFEM-style RL
-search over the corpus produces labeled examples, then a supervised model is
-fit on them. To retrain (e.g. on a different corpus):
+Or generate the markdown report:
 
 ```bash
-pip install -e ".[benchmark]"
-python -m scripts.run_stage0 --episodes 80     # RL label generation
-python -m scripts.train_meta_model             # trains + saves models/meta_model.pkl
+python -m scripts.report_benchmark results/my_run.jsonl          # to stdout
+python -m scripts.report_benchmark results/my_run.jsonl --out docs/benchmark_report.md
 ```
 
-Design details: [`afe/meta/README.md`](afe/meta/README.md).
+The report has four tables (excerpt — full generated example:
+[`docs/benchmark_report.md`](docs/benchmark_report.md)):
 
-## Project layout
+**Datasets legend** — maps the abbreviated column labels used by every other
+table to the full dataset key, its task, and its metric:
 
-```
-afe/            production library (pip-installable, `import afe`)
-  meta/           MF-OpenFE itself: online path + offline training pipeline
-  methods.py      AutoFE method adapters (baseline/openfe/cafem/featuretools/autofeat)
-  benchmark/      the benchmark harness + the compare() API
-scripts/        CLI entrypoints (run_benchmark, report_benchmark, run_stage0, ...)
-dev/            smoke/sanity utilities (smoke_download, parity_check)
-tests/          pytest suite — offline, no network
-docs/           guides: dataset setup, benchmark methodology, results
-research/       source papers backing the design choices
-data/, results/, models/   gitignored: dataset cache, run outputs, trained models
-```
 
-```bash
-pytest tests/ -q   # offline, ~10s
-```
+| abbrev | dataset | task | metric |
+|---|---|---|---|
+| CH | california-housing | regression | r2 |
+| GC | german-credit | classification | auc |
 
-Further reading: [`docs/benchmark_guide.md`](docs/benchmark_guide.md) (harness
-data flow), [`docs/dataset_setup.md`](docs/dataset_setup.md) (standing up the
-data), [`algorithm_plan.md`](algorithm_plan.md) (the method's design),
-[`synthesis_report.md`](synthesis_report.md) (literature synthesis).
+
+**Overview** — one row per method (baseline first), one column per dataset;
+the cell is the mean score across the three model families (best per column
+in bold):
+
+
+| method | CH | GC | ... |
+|---|---|---|---|
+| baseline | 0.715 | **0.774** | ... |
+| openfe | **0.767** | 0.771 | ... |
+
+
+**Per-method scores** — the breakdown behind the overview: each method's
+three model-family rows, per dataset:
+
+
+| method | model | CH | GC | ... |
+|---|---|---|---|---|
+| baseline | knn | 0.694 | 0.756 | ... |
+|  | linear | 0.606 | 0.787 | ... |
+|  | tree | 0.844 | 0.780 | ... |
+| openfe | knn | 0.779 | 0.758 | ... |
+|  | linear | 0.675 | 0.788 | ... |
+|  | tree | 0.848 | 0.767 | ... |
+
+
+**Speed** — feature-generation wall-time per (method, dataset), with a
+per-method median:
+
+
+| method | CH | GC | ... | median |
+|---|---|---|---|---|
+| baseline | 0.0 s | 0.0 s | ... | 0.0 s |
+| openfe | 35.5 s | 60.1 s | ... | 42.0 s |
+
+
+A final **Failures / timeouts / crashes** table counts every non-`ok` row
+per (dataset, method, status). Scores are fold-means when the results file
+contains multiple folds per (dataset, method, model family).

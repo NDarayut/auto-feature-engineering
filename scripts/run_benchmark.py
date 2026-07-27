@@ -22,7 +22,9 @@ from __future__ import annotations
 import argparse
 import warnings
 
-from afe.benchmark import DEFAULT_BUDGET_SECONDS, run_benchmark
+from afe.benchmark import (DEFAULT_BUDGET_SECONDS, DEFAULT_FIT_SAMPLE_ROWS,
+                           DEFAULT_MAX_COLS, DEFAULT_MAX_MEM_GB,
+                           DEFAULT_TRANSFORM_CHUNK_ROWS, run_benchmark)
 from afe.benchmark.models import MODEL_FAMILIES
 from afe.benchmark.registry import BENCHMARK
 from afe.methods import METHODS
@@ -53,12 +55,29 @@ def main() -> int:
     parser.add_argument("--out", default=None, help="output JSONL path")
     parser.add_argument("--no-resume", action="store_true",
                         help="re-run pairs even if already present in --out")
+    parser.add_argument("--max-cols", type=int, default=DEFAULT_MAX_COLS,
+                        help="cap a dataset to its N most target-associated columns "
+                             "before any method runs, generically bounding any method's "
+                             "combinatorial blowup in column count (0 disables)")
+    parser.add_argument("--fit-sample-rows", type=int, default=DEFAULT_FIT_SAMPLE_ROWS,
+                        help="cap the row count a method's fit step sees to a random "
+                             "sample of this size (0 disables)")
+    parser.add_argument("--transform-chunk-rows", type=int, default=DEFAULT_TRANSFORM_CHUNK_ROWS,
+                        help="apply a fitted method's transform in row chunks of this "
+                             "size instead of on the whole fold at once (0 disables)")
+    parser.add_argument("--max-mem-gb", type=float, default=DEFAULT_MAX_MEM_GB,
+                        help="hard RLIMIT_AS memory cap (GB) for each method's generation "
+                             "subprocess, as a safety net (0 disables)")
     args = parser.parse_args()
 
     keys = args.datasets or _default_dataset_order()
     n, out_path = run_benchmark(
         keys, args.methods, args.models, budget_seconds=args.budget, out_path=args.out,
-        resume=not args.no_resume)
+        resume=not args.no_resume,
+        max_cols=args.max_cols or None,
+        fit_sample_rows=args.fit_sample_rows or None,
+        transform_chunk_rows=args.transform_chunk_rows or None,
+        max_mem_gb=args.max_mem_gb or None)
     print(f"wrote {n} result rows to {out_path}")
     return 0
 

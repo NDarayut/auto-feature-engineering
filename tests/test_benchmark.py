@@ -59,7 +59,8 @@ def test_run_dataset_respects_model_families_subset():
     assert rows[0]["model_family"] == "tree"
 
 
-def _slow_method_worker(method_name, X_train, y_train, X_test, task, queue):
+def _slow_method_worker(method_name, X_train, y_train, X_test, task, queue,
+                        fit_sample_rows, transform_chunk_rows, max_mem_gb):
     time.sleep(5)
     queue.put(("ok", X_train, X_test, 5.0))
 
@@ -70,6 +71,45 @@ def test_budget_timeout_is_recorded(monkeypatch):
         "baseline", pd.DataFrame({"a": [1, 2]}), pd.Series([0, 1]),
         pd.DataFrame({"a": [1]}), "classification", budget_seconds=0.5)
     assert result["status"] == "timeout"
+
+
+def _oom_method_worker(method_name, X_train, y_train, X_test, task, queue,
+                       fit_sample_rows, transform_chunk_rows, max_mem_gb):
+    queue.put(("oom", "MemoryError under RLIMIT_AS cap", None, None))
+
+
+def test_rlimit_oom_is_recorded_quickly(monkeypatch):
+    monkeypatch.setattr(benchmark, "_generation_worker", _oom_method_worker)
+    t0 = time.time()
+    result = benchmark._run_method(
+        "openfe", pd.DataFrame({"a": [1, 2]}), pd.Series([0, 1]),
+        pd.DataFrame({"a": [1]}), "classification", budget_seconds=30, max_mem_gb=2.0)
+    assert result["status"] == "oom"
+    assert time.time() - t0 < 5
+
+
+def test_cap_columns_reduces_wide_frame():
+    rng = np.random.RandomState(0)
+    n = 200
+    X = pd.DataFrame({f"c{i}": rng.randn(n) for i in range(10)})
+    y = pd.Series(X["c0"] * 2 + rng.randn(n) * 0.01)  # c0 strongly target-associated
+    capped = benchmark._cap_columns(X, y, "regression", max_cols=3)
+    assert capped.shape[1] == 3
+    assert "c0" in capped.columns
+
+
+def test_sample_for_fit_caps_rows():
+    rng = np.random.RandomState(0)
+    X = pd.DataFrame({"a": rng.randn(1000)})
+    y = pd.Series(rng.randint(0, 2, size=1000))
+    X_fit, y_fit = benchmark._sample_for_fit(X, y, fit_sample_rows=100)
+    assert len(X_fit) == 100
+    assert len(y_fit) == 100
+    # below the cap: untouched
+    X_small = X.iloc[:50]
+    y_small = y.iloc[:50]
+    X_fit2, y_fit2 = benchmark._sample_for_fit(X_small, y_small, fit_sample_rows=100)
+    assert len(X_fit2) == 50
 
 
 def test_unknown_method_raises_at_generation():
