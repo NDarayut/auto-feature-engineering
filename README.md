@@ -58,7 +58,6 @@ print(compare(methods=[BaselineMethod, add_interaction],
               custom_datasets={"demo": (X, y)}))
 ```
 
-```
 ## linear
 | dataset | add_interaction | baseline |
 |---|---|---|
@@ -73,7 +72,7 @@ print(compare(methods=[BaselineMethod, add_interaction],
 | dataset | add_interaction | baseline |
 |---|---|---|
 | demo    | 0.999           | 0.995    |
-```
+
 
 Read that as: the engineered feature is *essential* for the linear model
 (0.540 — chance — up to 1.000) and irrelevant to the tree, which already
