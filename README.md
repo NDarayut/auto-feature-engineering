@@ -132,7 +132,7 @@ report: results/my_run.md
 
 Inside `results/my_run.md`:
 
-```markdown
+
 ## Overview
 
 | method | GC | CS |
@@ -150,7 +150,7 @@ Inside `results/my_run.md`:
 | openfe | knn | 0.776 | 0.818 |
 |  | linear | 0.822 | 0.789 |
 |  | tree | 0.831 | 0.936 |
-```
+
 
 Read the per-method table across model families: on `concrete-strength`
 (CS) OpenFE's features are worth a lot to the linear model (0.647 → 0.789)
