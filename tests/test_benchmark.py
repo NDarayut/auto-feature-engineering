@@ -195,3 +195,53 @@ def test_progress_lines_go_to_stderr_and_can_be_disabled(tmp_path, capsys):
     assert benchmark  # sanity
     quiet = capsys.readouterr()
     assert quiet.err == "", "progress=False should print nothing"
+
+
+# --- cross-platform guards ------------------------------------------------ #
+
+def _hide_resource_module(monkeypatch):
+    """Simulate Windows, where the POSIX ``resource`` module doesn't exist."""
+    import builtins
+    real_import = builtins.__import__
+
+    def fake(name, *args, **kwargs):
+        if name == "resource":
+            raise ImportError("No module named 'resource'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake)
+
+
+def test_memory_cap_degrades_without_resource_module(monkeypatch):
+    """Windows has no RLIMIT_AS; the cap must be skipped, not crash the worker."""
+    _hide_resource_module(monkeypatch)
+    assert benchmark._apply_memory_cap(16.0) is False
+
+
+def test_peak_mem_is_none_without_resource_module(monkeypatch):
+    _hide_resource_module(monkeypatch)
+    assert benchmark._peak_mem_mb() is None
+
+
+def test_peak_mem_units_differ_on_macos(monkeypatch):
+    """ru_maxrss is kilobytes on Linux but bytes on macOS -- a uniform /1024
+    would under-report macOS peaks by 1024x."""
+    monkeypatch.setattr(benchmark.sys, "platform", "linux")
+    linux = benchmark._peak_mem_mb()
+    monkeypatch.setattr(benchmark.sys, "platform", "darwin")
+    darwin = benchmark._peak_mem_mb()
+    assert linux == pytest.approx(darwin * 1024, rel=0.05)
+
+
+def test_run_completes_with_memory_cap_disabled():
+    """max_mem_gb=None is the same code path Windows takes (no cap applied),
+    so a run must complete normally without one.
+
+    Only the parent side is asserted here: generation happens in a *spawn*
+    subprocess that re-imports the module, so a monkeypatch in this process
+    cannot reach it -- the platform behaviour of the helpers themselves is
+    covered by the unit tests above.
+    """
+    rows = list(benchmark.run_dataset(_KEY, ["baseline"], budget_seconds=30,
+                                      max_mem_gb=None))
+    assert rows and all(r["status"] == "ok" for r in rows)

@@ -15,29 +15,58 @@ few lines. That keeps the benchmark neutral and its dependency surface small.
 
 ### 1. Install
 
+Python 3.10+ (developed on 3.12), on Linux, macOS, or Windows.
+
 ```bash
 git clone https://github.com/NDarayut/auto-feature-engineering.git
 cd auto-feature-engineering
-python -m venv .venv && . .venv/bin/activate
+python -m venv .venv
+```
+
+Activate it, then install:
+
+| | activate |
+|---|---|
+| Linux / macOS | `source .venv/bin/activate` |
+| Windows (PowerShell) | `.venv\Scripts\Activate.ps1` |
+| Windows (cmd) | `.venv\Scripts\activate.bat` |
+
+```bash
 pip install -e ".[datasets]"   # harness + dataset fetchers
 ```
 
-Python 3.10+ (developed on 3.12). From another project:
+If PowerShell blocks the activation script, allow it for the current session
+with `Set-ExecutionPolicy -Scope Process RemoteSigned`.
+
+From another project:
 
 ```bash
 pip install "auto-feature-engineering[datasets] @ git+https://github.com/NDarayut/auto-feature-engineering.git"
 ```
+
+Everything below is shown with Unix shell syntax. Two things differ on
+Windows — `> /dev/null` becomes `> $null` (PowerShell) or `> NUL` (cmd), and
+`scripts/benchmark_ctl.sh` needs WSL or Git Bash. See
+[Platform notes](#platform-notes) for the full list.
 
 ### 2. Set up the datasets
 
 Everything downloads automatically to `data/cache/` on first use, except:
 
 **Kaggle** (for `ieee-cis-fraud`, `bnp-paribas-claims`, `home-credit-default`,
-`house-prices`) — put an API token at `~/.kaggle/kaggle.json`
-([Account → API → Create New API Token](https://www.kaggle.com/settings)):
+`house-prices`) — download an API token
+([Account → API → Create New API Token](https://www.kaggle.com/settings))
+and put `kaggle.json` where the Kaggle client looks for it:
 
 ```bash
+# Linux / macOS
 mkdir -p ~/.kaggle && mv ~/Downloads/kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
+```
+
+```powershell
+# Windows (PowerShell) -- no chmod needed
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.kaggle" | Out-Null
+Move-Item "$env:USERPROFILE\Downloads\kaggle.json" "$env:USERPROFILE\.kaggle\"
 ```
 
 Then accept each competition's rules once, or downloads fail with HTTP 403:
@@ -301,6 +330,11 @@ redirection — and it avoids a real pitfall: killing a naively-backgrounded
 Python process can leave its `multiprocessing` workers alive and consuming
 memory.
 
+It is a bash script: Linux and macOS run it directly, Windows needs WSL or
+Git Bash. On native Windows use `Start-Process` (or just run the CLI in a
+dedicated terminal) — runs are resumable, so an interrupted sweep continues
+where it stopped.
+
 ```bash
 # Anything after `--` is passed straight through to run_benchmark.py:
 ./scripts/benchmark_ctl.sh start -- --methods baseline adapters:openfe --budget 900
@@ -329,6 +363,9 @@ All flags of `python -m scripts.run_benchmark`:
 | `--report` | `--out` with a `.md` suffix | where to write the markdown report generated when the run finishes |
 | `--no-report` | off | skip report generation |
 | `--quiet` | off | suppress the per-(dataset, method) progress lines |
+
+`--max-mem-gb` is **not enforced on Windows** — see
+[Platform notes](#platform-notes).
 
 The last four flags exist because a method's internal algorithm (candidate
 search, RL rollout, DFS, …) can scale combinatorially with a dataset's row
@@ -386,6 +423,34 @@ Row/feature/class counts are measured from the cached tables (features =
 columns excluding the target). Splits and OpenML versions are pinned in
 committed manifests (`afe/benchmark/manifests/`), so every machine evaluates
 the same tables on the same splits.
+
+## Platform notes
+
+The harness runs on Linux, macOS, and Windows. Splits, preprocessing,
+scoring, and reports are identical everywhere — a results file from one
+platform is directly comparable to another's. Three things do differ:
+
+| | Linux | macOS | Windows |
+|---|---|---|---|
+| `--max-mem-gb` hard cap | enforced | enforced | **not enforced** |
+| `peak_mem_mb` in results | yes | yes | `null` |
+| `scripts/benchmark_ctl.sh` | yes | yes | WSL / Git Bash |
+
+**`--max-mem-gb` on Windows.** The cap uses `RLIMIT_AS` from the POSIX
+`resource` module, which Windows has no equivalent for. The flag is accepted
+and silently skipped rather than failing — so a method that would have been
+killed as `oom` on Linux can instead exhaust the machine. The other guards
+(`--max-cols`, `--fit-sample-rows`, `--transform-chunk-rows`) are pure Python
+and work everywhere, so lower those on Windows for the largest datasets.
+
+**`peak_mem_mb`** comes from the same module and is `null` on Windows. Every
+other field is populated on all three platforms. Note that macOS and Linux
+report `ru_maxrss` in different units (bytes vs kilobytes); the harness
+converts per-platform, so the values are comparable.
+
+**Paths and shells.** Output paths accept forward slashes on every platform.
+Redirect stdout with `> /dev/null` (Linux/macOS), `> $null` (PowerShell), or
+`> NUL` (cmd) — progress goes to stderr and survives all three.
 
 ## Reports
 

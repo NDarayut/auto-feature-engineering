@@ -48,6 +48,7 @@ from __future__ import annotations
 import gc
 import json
 import multiprocessing as mp
+import sys
 import time
 from queue import Empty as QueueEmpty
 from pathlib import Path
@@ -125,22 +126,53 @@ def _chunked_transform(method, X: pd.DataFrame, chunk_rows: int | None) -> pd.Da
     return pd.concat(parts, axis=0)
 
 
+def _apply_memory_cap(max_mem_gb: float | None) -> bool:
+    """Cap this process's address space at ``max_mem_gb``; True if applied.
+
+    RLIMIT_AS (virtual address space), not RLIMIT_DATA/RLIMIT_RSS: numpy/
+    lightgbm's large allocations go through mmap, which RLIMIT_DATA doesn't
+    cover, and RLIMIT_RSS has been advisory-only (unenforced) on Linux since
+    kernel 2.6. Called before any heavy work so a runaway allocation raises
+    MemoryError in this process, instead of the OS OOM-killer picking an
+    arbitrary victim on the host.
+
+    Returns False, rather than raising, when the cap cannot be applied:
+    ``resource`` is POSIX-only and absent on Windows, and a container may
+    already impose a lower hard limit. The run continues uncapped -- the
+    row/column guards still bound memory, this is only the last-resort net.
+    """
+    if not max_mem_gb:
+        return False
+    try:
+        import resource
+    except ImportError:
+        return False  # Windows: no RLIMIT equivalent
+    limit_bytes = int(max_mem_gb * (1024 ** 3))
+    try:
+        resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
+        return True
+    except (ValueError, OSError):
+        return False
+
+
+def _peak_mem_mb() -> float | None:
+    """Peak resident memory of this process in MB, or None if unavailable.
+
+    ``ru_maxrss`` units are platform-specific: kilobytes on Linux, *bytes* on
+    macOS. Dividing uniformly by 1024 would silently report macOS peaks 1024x
+    too small, so the conversion is chosen per platform.
+    """
+    try:
+        import resource
+    except ImportError:
+        return None  # Windows
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return peak / (1024.0 ** 2) if sys.platform == "darwin" else peak / 1024.0
+
+
 def _generation_worker(method_name, X_train, y_train, X_test, task, queue,
                         fit_sample_rows, transform_chunk_rows, max_mem_gb) -> None:
-    # RLIMIT_AS (virtual address space), not RLIMIT_DATA/RLIMIT_RSS: numpy/
-    # lightgbm's large allocations go through mmap, which RLIMIT_DATA doesn't
-    # cover, and RLIMIT_RSS has been advisory-only (unenforced) on Linux
-    # since kernel 2.6. Set before any heavy work so a runaway allocation
-    # raises MemoryError here, in this process, instead of the OS OOM-killer
-    # picking an arbitrary victim on the host.
-    if max_mem_gb:
-        import resource
-
-        limit_bytes = int(max_mem_gb * (1024 ** 3))
-        try:
-            resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
-        except (ValueError, OSError):
-            pass  # a lower hard limit is already set (e.g. by a container) -- degrade to no cap
+    capped = _apply_memory_cap(max_mem_gb)
     try:
         method = resolve_method(method_name)()
         t0 = time.time()
@@ -156,19 +188,19 @@ def _generation_worker(method_name, X_train, y_train, X_test, task, queue,
         # Compute-cost outputs: peak memory of the
         # generation subprocess (this process -- it did nothing else), and
         # inference-time cost (transform on unseen rows) separately from fit.
-        import resource
-
         stats = {
             "fit_elapsed_s": t1 - t0,
             "transform_elapsed_s": t2 - t1,
-            "peak_mem_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0,
+            "peak_mem_mb": _peak_mem_mb(),
             "n_candidates": getattr(method, "n_candidates_", None),
         }
         queue.put(("ok", X_train_gen, X_test_gen, stats))
     except MemoryError as exc:
-        # Distinct from a generic bug: this is the RLIMIT_AS cap tripping.
-        queue.put(("oom", str(exc) or f"MemoryError under {max_mem_gb} GB RLIMIT_AS cap",
-                   None, None))
+        # Only attributable to our cap when we actually managed to set one;
+        # otherwise this is the host running out of memory on its own.
+        detail = (f"MemoryError under {max_mem_gb} GB RLIMIT_AS cap" if capped
+                  else "MemoryError (no RLIMIT cap applied on this platform)")
+        queue.put(("oom", str(exc) or detail, None, None))
     except Exception as exc:  # noqa: BLE001 -- report to parent, don't crash the run
         queue.put(("error", str(exc), None, None))
 
