@@ -2,85 +2,98 @@
 
 ## Datasets
 
-| abbrev | dataset | task | metric |
-|---|---|---|---|
-| BCW | breast-cancer-wisconsin | classification | auc |
-| CH | california-housing | regression | r2 |
-| CS | concrete-strength | regression | r2 |
-| E | electricity | classification | auc |
-| GC | german-credit | classification | auc |
-| HD | heart-disease | classification | auc_ovr |
-| HP | house-prices | regression | r2 |
-| J | jannis | classification | auc_ovr |
-| M | medical | regression | r2 |
-| N | nomao | classification | auc |
-| QB | qsar-biodegradation | classification | auc |
-| S | superconductivity | regression | r2 |
-| TC | telecom-churn | classification | auc |
+| abbrev | dataset | task | sector | metric |
+|---|---|---|---|---|
+| QB | qsar-biodegradation | classification | chemistry | auc |
+| E | electricity | classification | energy | auc |
+| BM | bank-marketing | classification | finance | auc |
+| BPC | bnp-paribas-claims | classification | finance | auc |
+| GC | german-credit | classification | finance | auc |
+| HCD | home-credit-default | classification | finance | auc |
+| ICF | ieee-cis-fraud | classification | finance | auc |
+| TC | telecom-churn | classification | finance/telco | auc |
+| J | jannis | classification | general | auc_ovr |
+| N | nomao | classification | general | auc |
+| BCW | breast-cancer-wisconsin | classification | healthcare | auc |
+| D1 | diabetes-130us | classification | healthcare | auc_ovr |
+| HD | heart-disease | classification | healthcare | auc_ovr |
+| BM2 | broken-machine | classification | industrial | auc |
+| VS | vehicle-sensit | classification | physical-sensor | auc_ovr |
+| C | covertype | multiclass | physical-science | auc_ovr |
+| MM | microsoft-mslr | regression | general | r2 |
+| CH | california-housing | regression | general/real-estate | r2 |
+| HP | house-prices | regression | general/real-estate | r2 |
+| M | medical | regression | healthcare | r2 |
+| CS | concrete-strength | regression | physical/materials | r2 |
+| S | superconductivity | regression | physical/materials | r2 |
 
 ## Overview
 
 Mean held-out score across the three model families (per-family scores are fold-means; metrics differ per dataset -- see the legend).
 
-| method | BCW | CH | CS | E | GC | HD | HP | J | M | N | QB | S | TC |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| baseline | 0.993 | 0.715 | 0.738 | **0.896** | **0.774** | **0.734** | 0.193 | **0.812** | 0.974 | **0.990** | 0.916 | 0.849 | 0.821 |
-| autofeat | 0.993 | 0.756 | 0.852 | — | 0.772 | 0.732 | — | — | 0.974 | — | 0.913 | **0.855** | **0.823** |
-| featuretools | **0.995** | **0.768** | **0.857** | — | 0.763 | 0.712 | **0.297** | — | 0.974 | — | **0.917** | -1.22e+21 | 0.717 |
-| openfe | 0.992 | 0.767 | 0.776 | 0.864 | 0.771 | 0.724 | — | — | **0.977** | — | 0.915 | — | 0.802 |
+| method | QB | E | BM | BPC | GC | HCD | ICF | TC | J | N | BCW | D1 | HD | BM2 | VS | C | MM | CH | HP | M | CS | S |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| cafem | **0.924** | **0.890** | 0.882 | **0.703** | 0.801 | **0.696** | **0.833** | **0.825** | **0.818** | **0.988** | 0.997 | **0.652** | 0.788 | **0.573** | **0.928** | **0.852** | **0.142** | 0.731 | **0.254** | 0.971 | 0.766 | **0.845** |
+| openfe | 0.922 | 0.860 | **0.902** | — | **0.806** | — | — | 0.802 | — | — | **0.998** | — | **0.805** | — | — | — | — | **0.777** | — | **0.975** | **0.778** | — |
 
 ## Per-method scores
 
-| method | model | BCW | CH | CS | E | GC | HD | HP | J | M | N | QB | S | TC |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| baseline | knn | 0.989 | 0.694 | 0.677 | 0.905 | 0.756 | 0.729 | 0.655 | 0.742 | 0.973 | 0.985 | 0.903 | 0.887 | 0.790 |
-|  | linear | 0.995 | 0.606 | 0.605 | 0.816 | 0.787 | 0.752 | -0.659 | 0.816 | 0.978 | 0.988 | 0.925 | 0.740 | 0.848 |
-|  | tree | 0.994 | 0.844 | 0.933 | 0.968 | 0.780 | 0.720 | 0.582 | 0.878 | 0.970 | 0.996 | 0.920 | 0.921 | 0.826 |
-| autofeat | knn | 0.990 | 0.736 | 0.791 | — | 0.746 | 0.726 | — | — | 0.974 | — | 0.900 | 0.889 | 0.794 |
-|  | linear | 0.996 | 0.688 | 0.831 | — | 0.787 | 0.751 | — | — | 0.978 | — | 0.919 | 0.757 | 0.849 |
-|  | tree | 0.994 | 0.844 | 0.933 | — | 0.783 | 0.720 | — | — | 0.970 | — | 0.920 | 0.920 | 0.826 |
-| featuretools | knn | 0.992 | 0.747 | 0.786 | — | 0.751 | 0.724 | 0.655 | — | 0.968 | — | 0.912 | 0.889 | 0.804 |
-|  | linear | 0.997 | 0.703 | 0.852 | — | 0.745 | 0.690 | -0.353 | — | 0.978 | — | 0.910 | -3.67e+21 | 0.517 |
-|  | tree | 0.996 | 0.852 | 0.933 | — | 0.794 | 0.723 | 0.588 | — | 0.977 | — | 0.929 | 0.925 | 0.830 |
-| openfe | knn | 0.989 | 0.779 | 0.740 | 0.807 | 0.758 | 0.718 | — | — | 0.975 | — | 0.905 | — | 0.803 |
-|  | linear | 0.995 | 0.675 | 0.657 | 0.832 | 0.788 | 0.739 | — | — | 0.978 | — | 0.922 | — | 0.811 |
-|  | tree | 0.993 | 0.848 | 0.930 | 0.954 | 0.767 | 0.714 | — | — | 0.978 | — | 0.919 | — | 0.793 |
+| method | model | QB | E | BM | BPC | GC | HCD | ICF | TC | J | N | BCW | D1 | HD | BM2 | VS | C | MM | CH | HP | M | CS | S |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| cafem | knn | 0.905 | 0.888 | 0.850 | 0.630 | 0.759 | 0.595 | 0.764 | 0.796 | 0.750 | 0.981 | 0.999 | 0.593 | 0.764 | 0.499 | 0.910 | 0.857 | 0.081 | 0.738 | 0.644 | 0.968 | 0.716 | 0.888 |
+|  | linear | 0.932 | 0.820 | 0.863 | 0.724 | 0.813 | 0.740 | 0.830 | 0.849 | 0.826 | 0.988 | 0.994 | 0.652 | 0.791 | 0.498 | 0.926 | 0.828 | 0.131 | 0.620 | -0.477 | 0.976 | 0.647 | 0.735 |
+|  | tree | 0.936 | 0.964 | 0.934 | 0.755 | 0.830 | 0.752 | 0.906 | 0.830 | 0.877 | 0.994 | 0.998 | 0.712 | 0.809 | 0.723 | 0.949 | 0.872 | 0.215 | 0.836 | 0.594 | 0.970 | 0.935 | 0.911 |
+| openfe | knn | 0.902 | 0.801 | 0.889 | — | 0.781 | — | — | 0.803 | — | — | 1.000 | — | 0.799 | — | — | — | — | 0.790 | — | 0.974 | 0.740 | — |
+|  | linear | 0.930 | 0.830 | 0.903 | — | 0.826 | — | — | 0.811 | — | — | 0.995 | — | 0.799 | — | — | — | — | 0.682 | — | 0.976 | 0.660 | — |
+|  | tree | 0.934 | 0.947 | 0.914 | — | 0.812 | — | — | 0.793 | — | — | 1.000 | — | 0.817 | — | — | — | — | 0.860 | — | 0.976 | 0.933 | — |
 
 ## Speed (feature-generation wall-time)
 
-| method | BCW | CH | CS | E | GC | HD | HP | J | M | N | QB | S | TC | median |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| baseline | 0.0 s | 0.0 s | 0.0 s | 0.0 s | 0.0 s | 0.0 s | 0.0 s | 0.0 s | 0.0 s | 0.0 s | 0.0 s | 0.0 s | 0.0 s | 0.0 s |
-| autofeat | 31.2 s | 10.3 s | 4.3 s | — | 26.9 s | 14.7 s | — | — | 16.9 s | — | 110.3 s | 61.9 s | 2.3 min | 26.9 s |
-| featuretools | 2.0 s | 0.7 s | 0.4 s | — | 1.1 s | 0.6 s | 17.5 s | — | 1.4 s | — | 3.7 s | 33.6 s | 2.1 s | 1.7 s |
-| openfe | 42.0 s | 35.5 s | 16.2 s | 90.6 s | 60.1 s | 19.3 s | — | — | 34.9 s | — | 117.8 s | — | 107.5 s | 42.0 s |
+| method | QB | E | BM | BPC | GC | HCD | ICF | TC | J | N | BCW | D1 | HD | BM2 | VS | C | MM | CH | HP | M | CS | S | median |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| cafem | 4.9 s | 2.1 s | 2.3 s | 17.0 s | 1.8 s | 10.5 s | 8.8 s | 2.5 s | 81.8 s | 11.4 s | 3.7 s | 11.1 s | 1.9 s | 15.9 s | 69.8 s | 24.4 s | 10.5 s | 2.3 s | 6.7 s | 1.3 s | 1.3 s | 18.0 s | 7.8 s |
+| openfe | 111.8 s | 60.4 s | 4.2 min | — | 61.5 s | — | — | 92.4 s | — | — | 39.8 s | — | 21.7 s | — | — | — | — | 37.9 s | — | 29.5 s | 19.0 s | — | 50.1 s |
+
+## Feature counts (before -> after)
+
+Number of columns fed into the downstream models before (original, post max-cols-cap) and after a method's generated features are added.
+
+| method | QB | E | BM | BPC | GC | HCD | ICF | TC | J | N | BCW | D1 | HD | BM2 | VS | C | MM | CH | HP | M | CS | S |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| cafem | 41 -> 44 | 8 -> 12 | 16 -> 16 | 132 -> 133 | 20 -> 21 | 121 -> 127 | 200 -> 206 | 19 -> 21 | 54 -> 74 | 118 -> 126 | 30 -> 36 | 49 -> 51 | 13 -> 13 | 58 -> 62 | 100 -> 120 | 54 -> 57 | 136 -> 139 | 8 -> 13 | 80 -> 85 | 5 -> 7 | 8 -> 8 | 81 -> 101 |
+| openfe | 41 -> 51 | 8 -> 18 | 16 -> 26 | — | 20 -> 30 | — | — | 19 -> 29 | — | — | 30 -> 40 | — | 13 -> 14 | — | — | — | — | 8 -> 18 | — | 5 -> 15 | 8 -> 18 | — |
+
+## By task
+
+Mean of the per-dataset overview score (mean across model families) over each dataset's group; a method missing on every dataset in a group shows —.
+
+| method | classification | multiclass | regression |
+|---|---|---|---|
+| cafem | 0.820 | **0.852** | 0.618 |
+| openfe | **0.871** | — | **0.843** |
+
+## By sector
+
+Mean of the per-dataset overview score (mean across model families) over each dataset's group; a method missing on every dataset in a group shows —.
+
+| method | chemistry | energy | finance | finance/telco | general | general/real-estate | healthcare | industrial | physical-science | physical-sensor | physical/materials |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| cafem | **0.924** | **0.890** | 0.783 | **0.825** | **0.649** | 0.492 | 0.852 | **0.573** | **0.852** | **0.928** | **0.805** |
+| openfe | 0.922 | 0.860 | **0.854** | 0.802 | — | **0.777** | **0.926** | — | — | — | 0.778 |
 
 ## Failures / timeouts / crashes
 
 | dataset | method | status | count |
 |---|---|---|---|
-| bank-marketing | autofeat | timeout | 1 |
-| bank-marketing | baseline | pair_crashed | 1 |
-| bank-marketing | featuretools | pair_crashed | 1 |
-| bank-marketing | openfe | timeout | 1 |
-| bnp-paribas-claims | autofeat | timeout | 1 |
-| bnp-paribas-claims | baseline | pair_crashed | 1 |
-| bnp-paribas-claims | featuretools | crashed | 1 |
 | bnp-paribas-claims | openfe | timeout | 1 |
-| electricity | autofeat | timeout | 1 |
-| electricity | featuretools | pair_crashed | 1 |
-| heart-disease | openfe | crashed | 1 |
-| house-prices | autofeat | error | 1 |
+| broken-machine | openfe | timeout | 1 |
+| covertype | openfe | timeout | 1 |
+| diabetes-130us | openfe | timeout | 1 |
+| home-credit-default | openfe | timeout | 1 |
 | house-prices | openfe | timeout | 1 |
-| jannis | autofeat | timeout | 1 |
+| ieee-cis-fraud | openfe | timeout | 1 |
 | jannis | openfe | timeout | 1 |
-| microsoft-mslr | baseline | pair_crashed | 1 |
 | microsoft-mslr | openfe | timeout | 1 |
-| nomao | autofeat | timeout | 1 |
-| nomao | featuretools | crashed | 1 |
-| nomao | openfe | timeout | 5 |
+| nomao | openfe | timeout | 1 |
 | superconductivity | openfe | timeout | 1 |
-| vehicle-sensit | autofeat | timeout | 1 |
-| vehicle-sensit | baseline | pair_crashed | 1 |
-| vehicle-sensit | featuretools | crashed | 1 |
 | vehicle-sensit | openfe | timeout | 1 |
