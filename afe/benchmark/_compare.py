@@ -388,5 +388,6 @@ def compare(
     if report_out:
         report_out.parent.mkdir(parents=True, exist_ok=True)
         report_out.write_text(build_report(rows))
-    reporter.finish(len(rows), out_path=out, report_path=report_out)
+    reporter.finish(len(rows), out_path=out, report_path=report_out,
+                    hint_when_unsaved=True)
     return CompareResult(rows=rows)

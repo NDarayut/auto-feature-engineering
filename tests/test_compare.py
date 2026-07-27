@@ -12,7 +12,7 @@ import pandas as pd
 import pytest
 
 import afe.benchmark._compare as compare_mod
-from afe.benchmark import CompareResult, compare
+from afe.benchmark import BaselineMethod, CompareResult, compare
 
 
 def _synthetic_regression(n: int = 200, seed: int = 0):
@@ -130,3 +130,23 @@ def test_compare_result_repr_is_summary():
                      model_families=["tree"])
     assert repr(result) == result.summary()
     assert isinstance(result, CompareResult)
+
+
+def test_compare_writes_no_files_unless_asked(tmp_path, monkeypatch, capsys):
+    """compare() is in-memory by default, and says so."""
+    monkeypatch.chdir(tmp_path)
+    X = pd.DataFrame({"a": [0.0, 1.0, 2.0, 3.0] * 8, "b": [1.0, 0.0] * 16})
+    y = pd.Series([0, 1] * 16)
+    compare(methods=[BaselineMethod], custom_datasets={"d": (X, y)},
+            model_families=["tree"])
+    assert list(tmp_path.iterdir()) == [], "compare() must not create files by default"
+    assert "returned object only" in capsys.readouterr().err
+
+
+def test_compare_writes_report_when_asked(tmp_path):
+    X = pd.DataFrame({"a": [0.0, 1.0, 2.0, 3.0] * 8, "b": [1.0, 0.0] * 16})
+    y = pd.Series([0, 1] * 16)
+    report = tmp_path / "r.md"
+    compare(methods=[BaselineMethod], custom_datasets={"d": (X, y)},
+            model_families=["tree"], report_path=report, progress=False)
+    assert report.read_text().startswith("# Benchmark Report")

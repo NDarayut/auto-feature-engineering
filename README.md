@@ -108,6 +108,12 @@ print(result)
 | **mean** | 0.882 | 0.884 |
 ```
 
+`compare()` keeps everything in memory and writes **no files** unless you
+ask — `print(result)` to see the tables, `report_path=` for a markdown
+report, `out_path=` for the raw JSONL (see the next section). The CLI is the
+opposite: it always writes a report. A run that saved nothing says so on its
+last line.
+
 One table per model family. Read across them: on `concrete-strength`
 OpenFE's features are worth a lot to the linear model (0.647 → 0.789) and
 the kNN (0.716 → 0.818), but almost nothing to the tree (0.935 → 0.936),

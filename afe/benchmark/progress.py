@@ -75,9 +75,17 @@ class ProgressReporter:
             msg = (error or "").splitlines()[0][:120] if error else ""
             self._write(f"{head}: {mark}" + (f" -- {msg}" if msg else ""))
 
-    def finish(self, n_rows: int, out_path=None, report_path=None) -> None:
+    def finish(self, n_rows: int, out_path=None, report_path=None,
+               hint_when_unsaved: bool = False) -> None:
         elapsed = _fmt_secs(time.time() - self._t0)
         self._write(f"done: {n_rows} result rows in {elapsed}"
                     + (f" -> {out_path}" if out_path else ""))
         if report_path:
             self._write(f"report: {report_path}")
+        elif hint_when_unsaved and not out_path:
+            # compare() keeps results in memory unless asked otherwise, while
+            # the CLI always writes a report. Say so here rather than leaving
+            # someone hunting the filesystem for a report that was never
+            # written.
+            self._write("results are in the returned object only -- print(result) "
+                        "to see them, or pass report_path=... / out_path=... to save")
