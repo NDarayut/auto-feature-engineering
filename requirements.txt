@@ -1,12 +1,12 @@
-# Full dev environment (core MFOpenFE deps + the benchmark harness's).
-# For a lighter install, use pyproject.toml's extras instead:
-#   pip install -e .                 # core only -- just enough to run MFOpenFE
-#   pip install -e ".[benchmark]"    # + the comparison harness's deps
+# Full environment: the harness, every dataset source, and every bundled
+# AutoFE method. For a lighter install, use pyproject.toml's extras instead:
+#   pip install -e .                 # core -- harness + baseline/openfe/cafem
+#   pip install -e ".[benchmark]"    # + dataset fetchers and the other methods
 
 # Core data handling
 pandas>=2.0
 numpy>=1.24
-tqdm>=4.60               # MFOpenFE progress reporting
+tqdm>=4.60
 pyarrow>=14.0            # parquet cache
 
 # Dataset sources
@@ -17,7 +17,7 @@ openml>=0.14             # OpenML suites (CC18 / CTR23 / AMLB) + datasets
 ucimlrepo>=0.0.7         # UCI datasets by name
 kaggle>=1.6              # Kaggle competition downloads (needs ~/.kaggle/kaggle.json)
 
-# Baseline model for the OpenFE parity check
+# Tree model in the 3-model scoring panel
 lightgbm>=4.0
 
 # AutoFE methods under benchmark
