@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "auto-feature-engineering"
 version = "0.1.0"
-description = "MF-OpenFE: automatic feature engineering, meta-filtered"
+description = "A fair, algorithm-agnostic benchmark harness for automatic feature engineering methods"
 requires-python = ">=3.10"
 readme = "README.md"
 dependencies = [
@@ -20,8 +20,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Only needed for the benchmark/comparison harness (afe.benchmark, dev/) --
-# not required to run afe.MFOpenFE itself.
+# Dataset fetchers and the optional third-party AutoFE methods -- the core
+# install covers baseline/openfe/cafem against your own data.
 benchmark = [
     "pyarrow>=14.0",
     "openml>=0.14",

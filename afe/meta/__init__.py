@@ -1,41 +1,33 @@
-"""MF-OpenFE offline meta-learning pipeline (algorithm_plan.md).
+"""CAFEM-style RL search components, backing ``afe.methods.CAFEMMethod``.
 
-This package implements the *offline, one-time* half of MF-OpenFE:
+Nothing here runs on its own; these are the pieces the CAFEM method drives
+per dataset, on the training fold only:
 
-* Stage 0 -- RL search (CAFEM-style Double DQN over a Feature Transformation
-  Graph) that, per historical corpus dataset, discovers which single-feature
-  transformations improve a wrapper model and emits
-  ``(meta-features, operator, usefulness)`` tuples. (``stage0``)
-* Stage 1 -- a supervised meta-model (per-operator RF/GBM) trained on those
-  pooled tuples, mapping an LFE-style QSA feature sketch to predicted
-  usefulness. This is the only artifact used at online usage time. (``stage1``)
-
-* Stages 3-6 -- the *online* path: every new dataset, every time, runs live.
-  OpenFE's own candidate generator, filtered by the trained Stage 1 model,
-  then verified + selected by feature importance. This is ``MFOpenFE``
-  (``online.py``) -- the public entrypoint, also re-exported as ``afe.MFOpenFE``.
-
-Common entrypoints are re-exported here for convenience::
-
-    from afe.meta import MFOpenFE, MetaModel, train_meta_model, generate_labels
-
-Every submodule remains directly importable too -- this is purely additive.
+* ``environment`` -- ``FTGEnvironment``, a Feature Transformation Graph over
+  one dataset: state = a feature's meta-feature sketch, action = a unary
+  operator, reward = the wrapper-model improvement from adding the
+  transformed feature.
+* ``ddqn`` -- ``DoubleDQN``, the agent that explores that graph.
+* ``operators`` -- the unary operator library the graph's edges apply.
+* ``meta_features`` -- the LFE-style QSA sketch used as the agent's state,
+  plus the univariate target-association score ``afe.benchmark.models``
+  reuses for its feature-efficiency metric.
+* ``corpus_data`` -- ``CorpusDataset``, the plain (X, y, task) container
+  ``FTGEnvironment`` takes as input.
 """
 
 from __future__ import annotations
 
+from .corpus_data import CorpusDataset
+from .ddqn import DoubleDQN
 from .environment import FTGEnvironment
 from .meta_features import feature_sketch
-from .online import MFOpenFE
-from .stage0 import generate_labels, run_rl_search
-from .stage1 import MetaModel, train_meta_model
+from .operators import apply_operator
 
 __all__ = [
+    "CorpusDataset",
+    "DoubleDQN",
     "FTGEnvironment",
-    "MFOpenFE",
-    "MetaModel",
+    "apply_operator",
     "feature_sketch",
-    "generate_labels",
-    "run_rl_search",
-    "train_meta_model",
 ]

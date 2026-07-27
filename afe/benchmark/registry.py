@@ -1,10 +1,10 @@
-"""Declarative dataset registry for the MF-OpenFE project.
+"""Declarative dataset registry.
 
-Two disjoint pools are defined here (see the approved dataset plan):
+Two disjoint pools are defined here:
 
-* ``BENCHMARK``  -- the ~22-dataset evaluation suite (draft_plan.md).
-* ``CORPUS_SUITES`` -- curated OpenML suites used, minus the benchmark, as the
-  meta-training corpus (algorithm_plan.md Sec. 3).
+* ``BENCHMARK``  -- the 22-dataset evaluation suite.
+* ``CORPUS_SUITES`` -- curated OpenML suites used, minus the benchmark, as a
+  meta-training corpus.
 
 Nothing here downloads anything; it is pure metadata. ``data/download.py``
 consumes these specs, and ``data/manifests.py`` freezes the disjoint split.
@@ -81,7 +81,7 @@ BENCHMARK: list[DatasetSpec] = [
                 aliases=("covtype", "forest-covertype"),
                 note="OpenML covertype did=150 (UCI tabular API flaky)"),
 
-    # ---- Sector add-ons (draft_plan Sec. 2 coverage + expert-FE ground truth) ----
+    # ---- Sector add-ons (coverage grid + expert-FE ground truth) ----
     DatasetSpec("ieee-cis-fraud", "IEEE-CIS Fraud Detection", "classification",
                 "finance", "large", "kaggle_competition", "ieee-fraud-detection",
                 target="isFraud", note="OpenFE showcase; winner FE writeups exist"),
@@ -134,7 +134,7 @@ CORPUS_SUITES: list[dict] = [
      "task": "regression", "note": "AutoML Benchmark, 33 regression"},
 ]
 
-# Target ceiling for the corpus (algorithm_plan Sec. 3 -- bounded by Stage-0 RL cost).
+# Target ceiling for the corpus (bounded by RL search cost).
 CORPUS_MAX_DATASETS = 100
 
 

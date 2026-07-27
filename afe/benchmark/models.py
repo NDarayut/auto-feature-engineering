@@ -1,5 +1,5 @@
-"""The 3-model panel (draft_plan Sec. 5.1): one boosted-tree model, one linear
-model, one non-tree/non-linear (distance-based) model, per task type."""
+"""The 3-model panel: one boosted-tree model, one linear model, one
+non-tree/non-linear (distance-based) model, per task type."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ MODEL_FAMILIES = ("tree", "linear", "knn")
 # Which encoding profile (afe.encoders.ENCODER_PROFILES) each family needs.
 ENCODING_FOR_FAMILY = {"tree": "tree", "linear": "linear", "knn": "linear"}
 
-# draft_plan Sec. 5.2 "feature efficiency": a generated feature counts as
+# "Feature efficiency": a generated feature counts as
 # individually predictive when its univariate target association (the same
 # scale-invariant score the meta-features use) clears this fixed threshold.
 EFFICIENCY_THRESHOLD = 0.1
@@ -24,8 +24,8 @@ EFFICIENCY_THRESHOLD = 0.1
 # kNN prediction cost is O(n_train * n_test); on the large benchmark datasets
 # (~1M rows) an uncapped fit would take days. The kNN family therefore fits
 # and scores on seeded row subsamples, identical for the baseline and every
-# AutoFE method on a dataset -- the draft_plan Sec. 1 controls hold, the cap
-# is just part of the (uniform) kNN evaluation protocol.
+# AutoFE method on a dataset -- the fair-comparison controls still hold, the
+# cap is just part of the (uniform) kNN evaluation protocol.
 KNN_MAX_TRAIN_ROWS = 50_000
 KNN_MAX_TEST_ROWS = 20_000
 KNN_SUBSAMPLE_SEED = 0

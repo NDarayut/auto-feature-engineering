@@ -1,11 +1,10 @@
 """Freeze the evaluation split *protocol* for every benchmark dataset.
 
-draft_plan.md Sec. 2 requires that, for each dataset, the train/test split is
-"fixed and recorded ... decided once and reused across all methods." Sec. 5.3
-uses a single fixed-seed 80/20 train/test split per dataset -- one point
-estimate per (dataset, method, model) combination, not a distribution across
-folds/seeds (see draft_plan.md Sec. 5.3 for the rationale: this trades
-statistical rigor for much lower compute and memory cost).
+For each dataset the train/test split is fixed and recorded -- decided once
+and reused across all methods. It is a single fixed-seed 80/20 train/test
+split per dataset: one point estimate per (dataset, method, model)
+combination, not a distribution across folds/seeds. That trades statistical
+rigor for much lower compute and memory cost.
 
 We freeze the *recipe* (protocol name + seed + params), not materialized row
 indices: regenerating indices from a fixed seed is a cheap, pure function, and

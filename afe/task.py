@@ -1,8 +1,8 @@
 """Shared classification/regression task-type inference.
 
 Used anywhere a target ``y`` needs a best-effort task guess when the caller
-doesn't specify one explicitly -- e.g. ``afe.meta.online.MFOpenFE`` and
-``afe.benchmark.compare``. Deliberately dependency-free and not coupled to
+doesn't specify one explicitly -- e.g. ``afe.benchmark.compare``.
+Deliberately dependency-free and not coupled to
 any particular algorithm or dataset registry.
 """
 

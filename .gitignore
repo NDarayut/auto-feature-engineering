@@ -51,3 +51,5 @@ Thumbs.db
 .claude/settings.local.json
 
 .claude
+# Archived research/dev material (kept locally, not pushed)
+archive/

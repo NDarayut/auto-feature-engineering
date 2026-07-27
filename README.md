@@ -6,32 +6,19 @@ frozen train/test splits, receives identically preprocessed data, and is
 scored by the same downstream model panel. Failures (timeouts, crashes,
 out-of-memory) are recorded as result rows, never silently dropped.
 
-## Contents
+## Usage
 
-- [Installation](#installation)
-- [Usage](#usage)
-  - [Command line](#command-line)
-  - [Python API](#python-api)
-  - [Benchmarking your own method](#benchmarking-your-own-method)
-- [Parameters](#parameters)
-- [Available methods](#available-methods)
-- [Available datasets](#available-datasets)
-- [Output](#output)
-
-## Installation
+### Install
 
 ```bash
-git clone <this-repo> && cd auto-feature-engineering
+git clone https://github.com/NDarayut/auto-feature-engineering.git
+cd auto-feature-engineering
 python -m venv .venv && . .venv/bin/activate
 pip install -e ".[benchmark]"      # harness + dataset fetchers (openml, ucimlrepo, kaggle, ...)
 pip install -e ".[benchmark,test]" # + pytest
 ```
 
-Python 3.10+ (developed on 3.12). Most datasets download automatically on
-first use and are cached under `data/cache/`; a few need Kaggle credentials
-or a one-time manual drop — see [`docs/dataset_setup.md`](docs/dataset_setup.md).
-
-## Usage
+Python 3.10+ (developed on 3.12).
 
 ### Command line
 
@@ -51,8 +38,6 @@ python -m scripts.report_benchmark results/my_run.jsonl
 
 Runs are **resumable**: (dataset, method) pairs already present in `--out`
 are skipped on restart, so an interrupted sweep continues where it left off.
-For long unattended runs there is a supervised background runner —
-[`docs/benchmark_ctl_usage.md`](docs/benchmark_ctl_usage.md).
 
 ### Python API
 
@@ -102,8 +87,7 @@ result = compare(
 )
 ```
 
-Both dataset sources can be mixed in one call. Full API reference:
-[`afe/benchmark/README.md`](afe/benchmark/README.md).
+Both dataset sources can be mixed in one call.
 
 ### How a run works
 
@@ -129,13 +113,64 @@ For each dataset, the harness:
 Metrics: ROC AUC for binary classification, macro one-vs-rest ROC AUC for
 multiclass, R² (plus MAE) for regression.
 
+### Dataset setup
+
+Most datasets download automatically on first use and are cached under
+`data/cache/`. Two exceptions:
+
+**Kaggle credentials** — needed for `ieee-cis-fraud`, `bnp-paribas-claims`,
+`home-credit-default`, and `house-prices`:
+
+1. Kaggle → **Account → API → Create New API Token** (downloads `kaggle.json`).
+2. ```bash
+   mkdir -p ~/.kaggle && mv ~/Downloads/kaggle.json ~/.kaggle/
+   chmod 600 ~/.kaggle/kaggle.json
+   ```
+3. **Accept each competition's rules once** in the browser (competition page →
+   *Rules* → *I Understand and Accept*), or downloads fail with HTTP 403.
+
+**Datasets needing a manual drop** — `microsoft-mslr`, `medical`, and
+`broken-machine` have no clean canonical source. They ship as RTDL-style
+`.npy` dumps in a `data.zip` linked from
+[`ZhangTP1996/OpenFE_reproduce`](https://github.com/ZhangTP1996/OpenFE_reproduce).
+Download it, unzip, and drop each dataset's folder at:
+
+```
+data/cache/raw/<key>/            # <key> = microsoft-mslr | medical | broken-machine
+  N_train.npy  N_val.npy  N_test.npy   # numeric features (required)
+  C_train.npy  C_val.npy  C_test.npy   # categorical features (optional)
+  y_train.npy  y_val.npy  y_test.npy   # target (required)
+```
+
+The zip's internal folder names are `microsoft`, `medical`, and
+`broken_machine` — rename each to the `<key>` above when copying. All three
+source splits are concatenated into one frame; the harness then freezes its
+own fixed split, uniformly, for every dataset.
+
+### Long unattended runs
+
+A full sweep takes many hours. `scripts/benchmark_ctl.sh` wraps the
+backgrounding so you don't hand-manage `nohup`, PID files, or log
+redirection — and it avoids a real pitfall: killing a naively-backgrounded
+Python process can leave its `multiprocessing` workers alive and consuming
+memory.
+
+```bash
+# Anything after `--` is passed straight through to run_benchmark.py:
+./scripts/benchmark_ctl.sh start -- --methods baseline openfe cafem --budget 900
+./scripts/benchmark_ctl.sh status     # running? + row/status counts so far
+./scripts/benchmark_ctl.sh tail       # follow the log
+./scripts/benchmark_ctl.sh stop       # kills the whole process group
+./scripts/benchmark_ctl.sh report -- --out docs/benchmark_report.md
+```
+
 ## Parameters
 
 All flags of `python -m scripts.run_benchmark`:
 
 | flag | default | meaning |
 |---|---|---|
-| `--datasets` | all 22, smallest-scale-first | benchmark keys to run — space-separated, e.g. `--datasets nomao covertype` (see [Available datasets](#available-datasets)) |
+| `--datasets` | all 22, smallest-scale-first | benchmark keys to run — space-separated, e.g. `--datasets nomao covertype` |
 | `--methods` | `baseline` | which methods to benchmark — any of `baseline openfe cafem featuretools autofeat` |
 | `--models` | all three | which model families to score generated features with — any of `tree linear knn` |
 | `--budget` | `300` | per (dataset, method) **generation** time budget in seconds; a method exceeding it is killed and recorded as `status="timeout"` |
@@ -156,7 +191,7 @@ workstation (dozens of GB free); lower `--max-mem-gb` (and/or
 `--fit-sample-rows`) on a smaller machine, or raise them if you want
 closer-to-full-data runs and have the memory to spare.
 
-## Available methods
+### Available methods
 
 | method | class | what it does |
 |---|---|---|
@@ -168,17 +203,15 @@ closer-to-full-data runs and have the memory to spare.
 
 All are re-exported from `afe.benchmark` and follow the same
 `fit_transform`/`transform` contract, so your own method plugs in alongside
-them (see [Benchmarking your own method](#benchmarking-your-own-method)).
+them.
 
-## Available datasets
+### Available datasets
 
 The frozen suite has **22 datasets** covering both task types, small through
-large scale, and a spread of sectors. The registry
-(`afe/benchmark/registry.py`) is the source of truth; download instructions:
-[`docs/dataset_setup.md`](docs/dataset_setup.md). The metric is chosen by
-the harness from the data: `r2` (+ `mae`) for regression, `auc` for binary
-classification, macro one-vs-rest `auc_ovr` when there are more than two
-classes.
+large scale, and a spread of sectors. `afe/benchmark/registry.py` is the
+source of truth. The metric is chosen by the harness from the data: `r2`
+(+ `mae`) for regression, `auc` for binary classification, macro one-vs-rest
+`auc_ovr` when there are more than two classes.
 
 | key | task | metric | rows | features | classes |
 |---|---|---|---:|---:|---:|
@@ -206,13 +239,13 @@ classes.
 | electricity | classification | auc | 45 312 | 8 | 2 |
 
 Row/feature/class counts are measured from the cached tables (features =
-columns excluding the target).
+columns excluding the target). Splits and OpenML versions are pinned in
+committed manifests (`afe/benchmark/manifests/`), so every machine evaluates
+the same tables on the same splits.
 
-Splits and OpenML versions are pinned in committed manifests
-(`afe/benchmark/manifests/`), so every machine evaluates the same tables on
-the same splits.
+## Reports
 
-## Output
+### Raw output
 
 `--out` is a JSONL file, one row per (dataset, method, model family),
 flushed as each row is produced. A successful row looks like:
@@ -228,11 +261,9 @@ A failed/killed run still gets a row (`model_family`/`metric`/`value` are
 {"key": "ieee-cis-fraud", "method": "openfe", "fold_id": "split0", "protocol": "holdout", "task": "classification", "status": "oom", "gen_elapsed_s": null, "model_family": null, "metric": null, "value": null, "error": "MemoryError under 16.0 GB RLIMIT_AS cap"}
 ```
 
-### Row fields
-
 | field | meaning |
 |---|---|
-| `key` | dataset key (see [Available datasets](#available-datasets)) |
+| `key` | dataset key |
 | `method` | method name (`baseline`, `openfe`, `cafem`, …) |
 | `fold_id`, `protocol` | which frozen split the row was scored on (`split0`, `holdout`) |
 | `task` | `classification`, `multiclass`, or `regression` |
@@ -246,7 +277,7 @@ A failed/killed run still gets a row (`model_family`/`metric`/`value` are
 | `feature_efficiency` | fraction of newly generated features that are individually predictive (univariate target association ≥ 0.1 on the train fold) — "many features that are also *good*", not just many features |
 | `error` | error message for failed rows, `null` otherwise |
 
-### Working with results
+Straight into pandas:
 
 ```python
 import pandas as pd
@@ -255,61 +286,55 @@ df = pd.read_json("results/my_run.jsonl", lines=True)
 df.groupby(["method", "model_family"])["value"].mean()
 ```
 
-Or generate the markdown report:
+### Generating a markdown report
 
 ```bash
-python -m scripts.report_benchmark results/my_run.jsonl          # to stdout
-python -m scripts.report_benchmark results/my_run.jsonl --out docs/benchmark_report.md
+python -m scripts.report_benchmark results/my_run.jsonl                        # to stdout
+python -m scripts.report_benchmark results/my_run.jsonl --out docs/report.md   # to a file
 ```
 
-The report has four tables (excerpt — full generated example:
-[`docs/benchmark_report.md`](docs/benchmark_report.md)):
+Reports are generated purely from the JSONL — regenerating one never
+re-runs the benchmark. Dataset columns are abbreviated (initials of the
+hyphenated key) and grouped by task, then sector, then key. Scores are
+fold-means when a results file holds multiple folds per (dataset, method,
+model family).
 
-**Datasets legend** — maps the abbreviated column labels used by every other
-table to the full dataset key, its task, and its metric:
+**Full worked example: [`docs/benchmark_report.md`](docs/benchmark_report.md)**
+(OpenFE vs. CAFEM across all 22 datasets). It contains:
 
+*Datasets* — the legend mapping each abbreviation to its full key, task,
+sector, and metric:
 
-| abbrev | dataset | task | metric |
-|---|---|---|---|
-| CH | california-housing | regression | r2 |
-| GC | german-credit | classification | auc |
-
-
-**Overview** — one row per method (baseline first), one column per dataset;
-the cell is the mean score across the three model families (best per column
-in bold):
-
-
-| method | CH | GC | ... |
-|---|---|---|---|
-| baseline | 0.715 | **0.774** | ... |
-| openfe | **0.767** | 0.771 | ... |
-
-
-**Per-method scores** — the breakdown behind the overview: each method's
-three model-family rows, per dataset:
-
-
-| method | model | CH | GC | ... |
+| abbrev | dataset | task | sector | metric |
 |---|---|---|---|---|
-| baseline | knn | 0.694 | 0.756 | ... |
-|  | linear | 0.606 | 0.787 | ... |
-|  | tree | 0.844 | 0.780 | ... |
-| openfe | knn | 0.779 | 0.758 | ... |
-|  | linear | 0.675 | 0.788 | ... |
-|  | tree | 0.848 | 0.767 | ... |
+| QB | qsar-biodegradation | classification | chemistry | auc |
+| CH | california-housing | regression | general/real-estate | r2 |
 
+*Overview* — one row per method, one column per dataset; the cell is the mean
+score across the three model families, best per column in bold:
 
-**Speed** — feature-generation wall-time per (method, dataset), with a
-per-method median:
-
-
-| method | CH | GC | ... | median |
+| method | QB | E | BM | ... |
 |---|---|---|---|---|
-| baseline | 0.0 s | 0.0 s | ... | 0.0 s |
-| openfe | 35.5 s | 60.1 s | ... | 42.0 s |
+| cafem | **0.924** | **0.890** | 0.882 | ... |
+| openfe | 0.922 | 0.860 | **0.902** | ... |
 
+*Per-method scores* — the breakdown behind the overview, each method's three
+model-family rows per dataset.
 
-A final **Failures / timeouts / crashes** table counts every non-`ok` row
-per (dataset, method, status). Scores are fold-means when the results file
-contains multiple folds per (dataset, method, model family).
+*Speed* — feature-generation wall-time per (method, dataset), plus a
+per-method median.
+
+*Feature counts* — columns fed to the downstream models before and after each
+method's generated features are added (e.g. `41 -> 51`).
+
+*By task* / *By sector* — the same overview score averaged over
+classification / multiclass / regression, and over each dataset's sector:
+
+| method | classification | multiclass | regression |
+|---|---|---|---|
+| cafem | 0.820 | **0.852** | 0.618 |
+| openfe | **0.871** | — | **0.843** |
+
+*Failures / timeouts / crashes* — every non-`ok` row counted per (dataset,
+method, status), so a method that wins on the datasets it finished is never
+confused with one that finished everywhere.

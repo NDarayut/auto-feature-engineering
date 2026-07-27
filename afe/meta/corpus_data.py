@@ -1,4 +1,4 @@
-"""Load a meta-training-corpus dataset by OpenML ``did`` (algorithm_plan Sec. 3).
+"""Load a meta-training-corpus dataset by OpenML ``did``.
 
 The benchmark suite is loaded through ``afe.download`` by ``DatasetSpec``; the
 corpus is different -- ``afe/manifests/corpus.json`` lists members only by
@@ -111,8 +111,8 @@ def load_corpus_dataset(
     """Fetch OpenML dataset ``did``, prep it, and cache the raw frame.
 
     ``max_rows`` subsamples very large corpus datasets (deterministically) so
-    Stage-0 RL search stays affordable -- the point of the corpus is breadth
-    across datasets, not exhaustive per-dataset scale (algorithm_plan Sec. 3).
+    RL search stays affordable -- the point of the corpus is breadth
+    across datasets, not exhaustive per-dataset scale.
     Returns ``None`` if the dataset can't be turned into a usable numeric table.
     """
     CACHE_DIR.mkdir(parents=True, exist_ok=True)

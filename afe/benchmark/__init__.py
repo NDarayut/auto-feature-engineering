@@ -1,19 +1,18 @@
 """AutoFE benchmark harness -- comparing methods against each other.
 
-Not needed to run `afe.MFOpenFE`. This subpackage is the research/comparison
-side of the project: a frozen dataset registry (`registry.py`), fetch+cache
-(`download.py`), disjoint benchmark/corpus manifests (`manifests.py`), a
-single fixed-seed split protocol (`splits.py`), per-model-family encoding +
-fold iteration (`eval_data.py`), a 3-model scoring panel (`models.py`), and
-the budget-limited benchmark runner (`benchmark.py`) that compares baseline
-vs. OpenFE vs. Featuretools vs. Autofeat vs. (eventually) MF-OpenFE.
+This subpackage is the comparison harness: a frozen dataset registry
+(`registry.py`), fetch+cache (`download.py`), disjoint benchmark/corpus
+manifests (`manifests.py`), a single fixed-seed split protocol (`splits.py`),
+per-model-family encoding + fold iteration (`eval_data.py`), a 3-model
+scoring panel (`models.py`), and the budget-limited benchmark runner
+(`benchmark.py`) that compares baseline vs. OpenFE vs. CAFEM vs.
+Featuretools vs. Autofeat.
 
 Also home to `compare()` (implemented in `_compare.py`) -- a standalone,
 algorithm-agnostic API for benchmarking *any* AutoFE method (yours, ours, or
-a mix) against either the built-in datasets or your own data. See
-`afe/benchmark/README.md`.
+a mix) against either the built-in datasets or your own data.
 
-See `docs/benchmark_guide.md` for the full research-harness data flow.
+See the repo-root `README.md` for usage.
 """
 
 from __future__ import annotations

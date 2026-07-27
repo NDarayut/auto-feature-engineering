@@ -118,7 +118,7 @@ class OpenFEMethod:
             ofe = OpenFE()
             self._features = ofe.fit(data=X_train, label=y_train, task=task_str,
                                       n_jobs=self.n_jobs, seed=0, verbose=self.verbose)
-            # draft_plan Sec. 3.3: candidates surviving the method's own
+            # Candidates surviving the method's own
             # internal selection, before our cap.
             self.n_candidates_ = len(self._features)
             selected = self._features[: self.n_new_features]
@@ -211,7 +211,7 @@ class CAFEMMethod:
     """CAFEM-style per-dataset RL feature engineering (PAKDD 2020).
 
     Trains a Double DQN over the training fold's Feature Transformation
-    Graph (the same FTG environment Stage 0 uses on the corpus), then does a
+    Graph (``afe.meta.FTGEnvironment``), then does a
     greedy rollout from every base feature and keeps each rollout's
     best-scoring transformation chain -- the chains whose transformed feature
     improved the wrapper model beyond ``min_delta``. ``transform`` replays

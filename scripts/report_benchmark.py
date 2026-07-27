@@ -19,8 +19,7 @@ a legend up top maps each abbreviation to the full key, task, sector, and
 metric. Columns/rows throughout are grouped by task then sector then key,
 so the task/sector structure is visible even in the per-dataset tables.
 
-Failure rows (status != "ok") are counted and reported, not dropped
-(draft_plan Sec. 6).
+Failure rows (status != "ok") are counted and reported, not dropped.
 
     python -m scripts.report_benchmark results/benchmark_results.jsonl
 """

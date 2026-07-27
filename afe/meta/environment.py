@@ -1,12 +1,11 @@
-"""Feature Transformation Graph (FTG) environment for the Stage-0 RL agent.
+"""Feature Transformation Graph (FTG) environment for the RL agent.
 
 CAFEM (PAKDD 2020) frames per-feature engineering as navigating a graph: a node
 is a candidate feature, an action applies a transformation operator, and the
 reward is the wrapper model's performance change from the resulting feature.
-This module is that environment for a *single* corpus dataset.
+This module is that environment for a *single* dataset.
 
-Design choices that keep RL search affordable (algorithm_plan Sec. 3 caps
-Stage-0 cost by corpus size, not per-dataset exhaustiveness):
+Design choices that keep RL search affordable:
 
 * One fixed train/eval split per dataset drives every reward estimate, so
   rewards are comparable within an episode and across episodes.
@@ -83,7 +82,7 @@ class FTGEnvironment:
         # per dataset expensive. Keep the columns most associated with the
         # target -- that keeps the base score meaningful (so a candidate's
         # *marginal* gain is a fair signal) while bounding cost by max_features,
-        # not by the dataset's native width (algorithm_plan Sec. 3).
+        # not by the dataset's native width.
         if X.shape[1] > max_features:
             self.selected_columns = _top_feature_columns(X, y, self.task, max_features)
             X = X[:, self.selected_columns]

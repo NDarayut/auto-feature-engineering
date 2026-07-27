@@ -1,4 +1,4 @@
-"""Encoder guards: draft_plan Sec. 4 (per-model-family profiles, fit on train
+"""Encoder guards: per-model-family profiles, fit on train
 fold only) -- no network needed, synthetic frames only."""
 
 import numpy as np

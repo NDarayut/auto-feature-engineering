@@ -1,4 +1,4 @@
-"""Coverage guards: the benchmark suite must span draft_plan Sec. 2's grid."""
+"""Coverage guards: the benchmark suite must span the task/sector/scale grid."""
 
 from collections import defaultdict
 

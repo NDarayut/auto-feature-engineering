@@ -49,7 +49,7 @@ cmd_start() {
   # multiprocessing workers inherit the same group. That lets `stop` kill
   # the whole tree at once with `kill -- -PGID` instead of leaking
   # orphaned subprocesses (this bit us during development -- see
-  # docs/benchmark_guide.md). `setsid` was tried first and rejected: it
+  # the README). `setsid` was tried first and rejected: it
   # forks internally, so the PID bash captures via $! is not reliably the
   # PID of the actual long-running process.
   set -m

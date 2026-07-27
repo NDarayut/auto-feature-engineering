@@ -3,8 +3,8 @@
 LFE (IJCAI 2017) represents a feature to its meta-model by a *quantile sketch*:
 a fixed-size, scale-invariant summary of the feature's value distribution, so
 the same learned model applies across datasets with wildly different feature
-scales. We use that sketch as the state for the Stage-0 RL agent *and* as the
-input to the Stage-1 meta-model, so both see a feature the same way.
+scales. We use that sketch as the state for the RL agent that searches the
+Feature Transformation Graph.
 
 ``feature_sketch(x, y, task)`` returns a fixed-length float vector:
 

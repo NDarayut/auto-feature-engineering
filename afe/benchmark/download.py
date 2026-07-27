@@ -185,7 +185,8 @@ def _fetch_openfe_reproduce(spec: DatasetSpec) -> tuple[pd.DataFrame, str]:
     if not (dest / "N_train.npy").exists():
         raise FileNotFoundError(
             f"{spec.key}: no {dest}/N_train.npy -- fetch data.zip from the "
-            "ZhangTP1996/OpenFE_reproduce mirror (see docs/dataset_setup.md) "
+            "ZhangTP1996/OpenFE_reproduce mirror (see the 'Datasets needing "
+            "a manual drop' section of README.md) "
             f"and drop its data/{spec.fetch_key}/ folder at {dest}.")
 
     frames = []

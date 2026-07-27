@@ -2,7 +2,7 @@
 
 * ``benchmark.json`` -- the evaluation suite from ``registry.BENCHMARK``.
 * ``corpus.json``    -- members of ``registry.CORPUS_SUITES`` with every
-  benchmark dataset removed (algorithm_plan Sec. 3 hard-disjointness rule).
+  benchmark dataset removed (hard-disjointness rule).
 
 Run ``python -m data.manifests`` to (re)generate them. Enumerating the OpenML
 suites needs the ``openml`` package; if it is missing we still write the

@@ -1,4 +1,4 @@
-"""Per-model-family encoders, fit on the training fold only (draft_plan Sec. 4).
+"""Per-model-family encoders, fit on the training fold only.
 
 Two profiles:
 

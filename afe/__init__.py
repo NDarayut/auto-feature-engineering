@@ -1,30 +1,28 @@
-"""MF-OpenFE: automatic feature engineering, meta-filtered.
+"""AutoFE Benchmark -- compare automatic feature engineering methods fairly.
+
+Every method runs on identical frozen train/test splits, receives identically
+preprocessed data, and is scored by the same downstream model panel. Failures
+(timeouts, crashes, out-of-memory) are recorded as result rows, never
+silently dropped.
 
 Public entrypoint::
 
-    from afe import MFOpenFE
+    from afe import compare
 
-    mfe = MFOpenFE(task="classification", progress=True)
-    X_train_fe = mfe.fit_transform(X_train, y_train)
-    X_test_fe = mfe.transform(X_test)
+    result = compare(
+        methods=[BaselineMethod, OpenFEMethod, my_own_method],
+        datasets=["german-credit"],
+    )
+    print(result)
 
-Offline meta-model training utilities (``MetaModel``, ``train_meta_model``,
-``generate_labels``) are also re-exported for advanced/research use -- see
-``afe/meta/README.md``.
-
-The AutoFE benchmark/comparison harness (baseline vs. OpenFE vs. Featuretools
-vs. Autofeat vs. MF-OpenFE, plus the frozen dataset registry it runs against)
-lives in the separate ``afe.benchmark`` subpackage and is not part of this
-top-level surface -- see ``docs/benchmark_guide.md``.
+The harness itself -- frozen dataset registry, fetch/cache, split protocol,
+per-fold encoding, the 3-model scoring panel and the budget-limited runner --
+lives in the ``afe.benchmark`` subpackage; the method adapters live in
+``afe.methods``. See the repo-root ``README.md`` for usage.
 """
 
 from __future__ import annotations
 
-from .meta import MetaModel, MFOpenFE, generate_labels, train_meta_model
+from .benchmark import compare
 
-__all__ = [
-    "MetaModel",
-    "MFOpenFE",
-    "generate_labels",
-    "train_meta_model",
-]
+__all__ = ["compare"]

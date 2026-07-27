@@ -3,12 +3,11 @@ model panel, under a fixed compute budget, and write results to JSONL.
 
 One row per (dataset, method, model_family): task metric, generation time,
 feature counts, and a ``status`` that is one of "ok", "timeout", "error", or
-"model_error" -- failed/timed-out runs are recorded, not silently dropped
-(draft_plan Sec. 6: "failure cases/timeouts/crashes included rather than
-excluded").
+"model_error" -- failure cases, timeouts and crashes are included in the
+results rather than silently dropped.
 
 Feature *generation* (the expensive, potentially-runaway step) runs in a
-spawned subprocess with a hard wall-clock budget (draft_plan Sec. 3): if a
+spawned subprocess with a hard wall-clock budget: if a
 method doesn't finish in time, the subprocess is killed and the row is
 recorded as a timeout rather than blocking the run indefinitely. Running
 generation in its own process also means whatever memory
@@ -148,7 +147,7 @@ def _generation_worker(method_name, X_train, y_train, X_test, task, queue,
         X_train_gen = _chunked_transform(method, X_train, transform_chunk_rows)
         X_test_gen = _chunked_transform(method, X_test, transform_chunk_rows)
         t2 = time.time()
-        # draft_plan Sec. 3.2/5.2 compute-cost outputs: peak memory of the
+        # Compute-cost outputs: peak memory of the
         # generation subprocess (this process -- it did nothing else), and
         # inference-time cost (transform on unseen rows) separately from fit.
         import resource
@@ -235,9 +234,9 @@ def run_dataset(
 
     Loads the dataset and computes its single frozen train/test split once,
     then reuses that same split for every method in ``methods`` -- the
-    baseline and every AutoFE method are compared on identical data, per
-    draft_plan Sec. 1 ("only thing that should differ ... is which method
-    generated the features"). ``max_cols`` is applied here, once, so every
+    baseline and every AutoFE method are compared on identical data, so the
+    only thing that differs between arms is which method generated the
+    features. ``max_cols`` is applied here, once, so every
     method (including baseline) sees the identical column set.
     """
     spec = _BY_KEY[key]

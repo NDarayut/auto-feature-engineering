@@ -1,4 +1,4 @@
-"""Split-protocol guards: draft_plan Sec. 2 (fixed, reused split) and Sec. 5.3
+"""Split-protocol guards: a fixed, reused split
 (single fixed-seed 80/20 train/test split per dataset) -- no network needed."""
 
 import numpy as np
