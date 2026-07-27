@@ -18,6 +18,15 @@ See `docs/benchmark_guide.md` for the full research-harness data flow.
 
 from __future__ import annotations
 
+from ..methods import (
+    METHODS,
+    AutoFEMethod,
+    AutofeatMethod,
+    BaselineMethod,
+    CAFEMMethod,
+    FeaturetoolsMethod,
+    OpenFEMethod,
+)
 from ._compare import CompareResult, compare
 from .benchmark import DEFAULT_BUDGET_SECONDS, run_benchmark
 from .download import load
@@ -34,9 +43,16 @@ __all__ = [
     "BENCHMARK",
     "CORPUS_SUITES",
     "CORPUS_MAX_DATASETS",
+    "METHODS",
+    "AutoFEMethod",
+    "AutofeatMethod",
+    "BaselineMethod",
+    "CAFEMMethod",
     "CompareResult",
     "DEFAULT_BUDGET_SECONDS",
     "DatasetSpec",
+    "FeaturetoolsMethod",
+    "OpenFEMethod",
     "benchmark_names_for_exclusion",
     "compare",
     "iter_folds",

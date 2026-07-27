@@ -38,7 +38,8 @@ from typing import Iterable, Iterator
 from ..encoders import _split_columns
 from ..methods import METHODS, prep_for_generation
 from .download import load
-from .models import MODEL_FAMILIES, fit_and_score, prepare_family_input
+from .models import (MODEL_FAMILIES, feature_efficiency, fit_and_score,
+                     prepare_family_input)
 from .registry import BENCHMARK
 from .splits import iter_split_indices, protocol_for
 
@@ -53,8 +54,21 @@ def _generation_worker(method_name, X_train, y_train, X_test, task, queue) -> No
         method = METHODS[method_name]()
         t0 = time.time()
         X_train_gen = method.fit_transform(X_train, y_train, task)
+        t1 = time.time()
         X_test_gen = method.transform(X_test)
-        queue.put(("ok", X_train_gen, X_test_gen, time.time() - t0))
+        t2 = time.time()
+        # draft_plan Sec. 3.2/5.2 compute-cost outputs: peak memory of the
+        # generation subprocess (this process -- it did nothing else), and
+        # inference-time cost (transform on unseen rows) separately from fit.
+        import resource
+
+        stats = {
+            "fit_elapsed_s": t1 - t0,
+            "transform_elapsed_s": t2 - t1,
+            "peak_mem_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0,
+            "n_candidates": getattr(method, "n_candidates_", None),
+        }
+        queue.put(("ok", X_train_gen, X_test_gen, stats))
     except Exception as exc:  # noqa: BLE001 -- report to parent, don't crash the run
         queue.put(("error", str(exc), None, None))
 
@@ -75,7 +89,7 @@ def _run_method(method_name, X_train, y_train, X_test, task,
     # the OS pipe buffer makes the child block on Queue.put() until someone
     # reads, so join()-then-get() can deadlock until the timeout kills it.
     try:
-        status, a, b, elapsed = queue.get(timeout=budget_seconds)
+        status, a, b, stats = queue.get(timeout=budget_seconds)
     except QueueEmpty:
         if proc.is_alive():
             proc.terminate()
@@ -85,7 +99,9 @@ def _run_method(method_name, X_train, y_train, X_test, task,
     proc.join()
     if status == "error":
         return {"status": "error", "error": a, "elapsed_s": None}
-    return {"status": "ok", "X_train_gen": a, "X_test_gen": b, "elapsed_s": elapsed}
+    return {"status": "ok", "X_train_gen": a, "X_test_gen": b,
+            "elapsed_s": stats["fit_elapsed_s"] + stats["transform_elapsed_s"],
+            **stats}
 
 
 def run_dataset(
@@ -121,7 +137,11 @@ def run_dataset(
             gen = _run_method(method_name, X_train_num, y_train, X_test_num,
                                spec.task, budget_seconds)
             base = dict(key=key, method=method_name, fold_id=fold_id, protocol=protocol,
-                        task=spec.task, status=gen["status"], gen_elapsed_s=gen.get("elapsed_s"))
+                        task=spec.task, status=gen["status"], gen_elapsed_s=gen.get("elapsed_s"),
+                        fit_elapsed_s=gen.get("fit_elapsed_s"),
+                        transform_elapsed_s=gen.get("transform_elapsed_s"),
+                        peak_mem_mb=gen.get("peak_mem_mb"),
+                        n_candidates=gen.get("n_candidates"))
             if gen["status"] != "ok":
                 yield dict(base, model_family=None, metric=None, value=None,
                            error=gen.get("error"))
@@ -129,6 +149,8 @@ def run_dataset(
 
             X_train_gen, X_test_gen = gen["X_train_gen"], gen["X_test_gen"]
             n_generated = X_train_gen.shape[1] - X_train_num.shape[1]
+            base["feature_efficiency"] = feature_efficiency(
+                X_train_num, X_train_gen, y_train, spec.task)
 
             for family in model_families:
                 Xtr_f, Xte_f = prepare_family_input(family, X_train_gen, X_test_gen)

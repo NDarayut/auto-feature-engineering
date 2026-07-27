@@ -1,5 +1,6 @@
 """AutoFE method adapters: a common fit_transform/transform contract wrapping
-the baseline (no-op) and three external AutoFE libraries under benchmark.
+the baseline (no-op), three external AutoFE libraries, and a CAFEM-style
+per-dataset RL search under benchmark.
 
 Every adapter consumes an already-numeric, NaN-free matrix (categoricals
 ordinal-coded, numerics median-imputed -- see ``prep_for_generation``) and
@@ -117,6 +118,9 @@ class OpenFEMethod:
             ofe = OpenFE()
             self._features = ofe.fit(data=X_train, label=y_train, task=task_str,
                                       n_jobs=self.n_jobs, seed=0, verbose=self.verbose)
+            # draft_plan Sec. 3.3: candidates surviving the method's own
+            # internal selection, before our cap.
+            self.n_candidates_ = len(self._features)
             selected = self._features[: self.n_new_features]
             X_train_new, _ = transform(X_train, X_train, selected, n_jobs=self.n_jobs)
         self._selected = selected
@@ -203,9 +207,124 @@ class AutofeatMethod:
                             columns=columns).replace([np.inf, -np.inf], np.nan)
 
 
+class CAFEMMethod:
+    """CAFEM-style per-dataset RL feature engineering (PAKDD 2020).
+
+    Trains a Double DQN over the training fold's Feature Transformation
+    Graph (the same FTG environment Stage 0 uses on the corpus), then does a
+    greedy rollout from every base feature and keeps each rollout's
+    best-scoring transformation chain -- the chains whose transformed feature
+    improved the wrapper model beyond ``min_delta``. ``transform`` replays
+    the exact same operator chains on the test fold.
+
+    This is CAFEM run *per dataset at usage time* -- the search cost is paid
+    on every new dataset, which is precisely the cost MF-OpenFE's offline
+    meta-model amortizes away. Statistics-bearing operators (zscore/minmax)
+    are applied per-split, matching the FTG environment's own convention;
+    NaNs in a generated column are filled with the train-fold median.
+    """
+
+    name = "cafem"
+
+    def __init__(self, episodes: int = 40, max_depth: int = 2,
+                 eval_rows: int = 2000, max_features: int = 50,
+                 max_new_features: int = 20, min_delta: float = 0.0,
+                 seed: int = 0):
+        self.episodes = episodes
+        self.max_depth = max_depth
+        self.eval_rows = eval_rows
+        self.max_features = max_features
+        self.max_new_features = max_new_features
+        self.min_delta = min_delta
+        self.seed = seed
+        self._chains: list[tuple[str, tuple[str, ...], float]] = []
+        self._fill_values: dict[str, float] = {}
+
+    def fit_transform(self, X_train, y_train, task):
+        from .meta.corpus_data import CorpusDataset
+        from .meta.ddqn import DoubleDQN
+        from .meta.environment import FTGEnvironment
+
+        # The FTG environment needs a numeric target: class labels (possibly
+        # strings) become codes; regression targets are cast to float.
+        if task == "regression":
+            y_num = np.asarray(y_train, dtype="float64")
+        else:
+            y_num = pd.factorize(pd.Series(y_train))[0].astype("float64")
+        dataset = CorpusDataset(
+            did=-1, name="cafem-train", task=task,
+            X=X_train.reset_index(drop=True), y=y_num,
+            feature_names=tuple(map(str, X_train.columns)),
+        )
+        env = FTGEnvironment(dataset, max_depth=self.max_depth,
+                             eval_rows=self.eval_rows,
+                             max_features=self.max_features, seed=self.seed)
+        agent = DoubleDQN(state_dim=env.state_dim, n_actions=env.n_actions,
+                          seed=self.seed)
+        for _ in range(self.episodes):
+            state = env.reset()
+            done = False
+            while not done:
+                action = agent.act(state)
+                next_state, reward, done, _ = env.step(action)
+                agent.remember(state, action, reward, next_state, done)
+                agent.learn()
+                state = next_state
+            agent.decay_epsilon()
+
+        # Greedy rollout from every base feature: keep the chain prefix with
+        # the best observed marginal improvement (a node's delta measures that
+        # feature's standalone usefulness, so the best prefix is the feature
+        # worth materializing).
+        chains: list[tuple[str, tuple[str, ...], float]] = []
+        columns = list(X_train.columns)
+        for j, col_idx in enumerate(env.selected_columns):
+            state = env.reset(feature_index=j)
+            ops: list[str] = []
+            best_ops, best_delta = None, self.min_delta
+            done = False
+            while not done:
+                action = agent.act(state, greedy=True)
+                state, _, done, info = env.step(action)
+                if info.get("degenerate"):
+                    break
+                ops.append(info["operator"])
+                delta = env.transitions[-1].delta
+                if delta > best_delta:
+                    best_ops, best_delta = tuple(ops), delta
+            if best_ops:
+                chains.append((str(columns[col_idx]), best_ops, best_delta))
+        chains.sort(key=lambda c: c[2], reverse=True)
+        self.n_candidates_ = len(chains)
+        self._chains = chains[: self.max_new_features]
+
+        return self._apply_chains(X_train, fit=True)
+
+    def transform(self, X_test):
+        return self._apply_chains(X_test, fit=False)
+
+    def _apply_chains(self, X: pd.DataFrame, fit: bool) -> pd.DataFrame:
+        from .meta.operators import apply_operator
+
+        out = X.copy()
+        for col, ops, _delta in self._chains:
+            values = np.asarray(X[col], dtype="float64")
+            for op in ops:
+                values = apply_operator(op, values)
+            new_name = f"{col}__{'_'.join(ops)}"
+            if fit:
+                finite = values[np.isfinite(values)]
+                self._fill_values[new_name] = (
+                    float(np.median(finite)) if finite.size else 0.0)
+            fill = self._fill_values.get(new_name, 0.0)
+            out[new_name] = np.where(np.isfinite(values), values, fill)
+        return out
+
+
 METHODS: dict[str, type] = {
     "baseline": BaselineMethod,
     "openfe": OpenFEMethod,
     "featuretools": FeaturetoolsMethod,
     "autofeat": AutofeatMethod,
+    "cafem": CAFEMMethod,
 }

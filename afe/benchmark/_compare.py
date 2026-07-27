@@ -42,7 +42,8 @@ from ..methods import AutoFEMethod, prep_for_generation
 from ..task import infer_task
 from .benchmark import _completed_pairs
 from .download import load
-from .models import MODEL_FAMILIES, fit_and_score, prepare_family_input
+from .models import (MODEL_FAMILIES, feature_efficiency, fit_and_score,
+                     prepare_family_input)
 from .registry import BENCHMARK
 from .splits import HOLDOUT_TEST_SIZE, _holdout_test_mask, _seed_for, _stratified_holdout_test_mask
 
@@ -195,6 +196,8 @@ def _run_dataset(
 
             X_train_gen, X_test_gen = gen["X_train_gen"], gen["X_test_gen"]
             n_generated = X_train_gen.shape[1] - X_train_num.shape[1]
+            base["feature_efficiency"] = feature_efficiency(
+                X_train_num, X_train_gen, y_train, task)
             for family in model_families:
                 Xtr_f, Xte_f = prepare_family_input(family, X_train_gen, X_test_gen)
                 try:

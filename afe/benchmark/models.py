@@ -16,6 +16,57 @@ MODEL_FAMILIES = ("tree", "linear", "knn")
 # Which encoding profile (afe.encoders.ENCODER_PROFILES) each family needs.
 ENCODING_FOR_FAMILY = {"tree": "tree", "linear": "linear", "knn": "linear"}
 
+# draft_plan Sec. 5.2 "feature efficiency": a generated feature counts as
+# individually predictive when its univariate target association (the same
+# scale-invariant score the meta-features use) clears this fixed threshold.
+EFFICIENCY_THRESHOLD = 0.1
+
+# kNN prediction cost is O(n_train * n_test); on the large benchmark datasets
+# (~1M rows) an uncapped fit would take days. The kNN family therefore fits
+# and scores on seeded row subsamples, identical for the baseline and every
+# AutoFE method on a dataset -- the draft_plan Sec. 1 controls hold, the cap
+# is just part of the (uniform) kNN evaluation protocol.
+KNN_MAX_TRAIN_ROWS = 50_000
+KNN_MAX_TEST_ROWS = 20_000
+KNN_SUBSAMPLE_SEED = 0
+
+
+def feature_efficiency(X_base, X_gen, y_train, task: str) -> float | None:
+    """Fraction of *newly generated* train-fold columns that are individually
+    predictive (univariate association >= EFFICIENCY_THRESHOLD).
+
+    Returns None when the method added no columns. Computed on the training
+    fold only -- it describes the generated features, it never influences
+    selection or scoring.
+    """
+    from ..meta.meta_features import _target_association
+
+    base = set(map(str, X_base.columns))
+    new_cols = [c for c in X_gen.columns if str(c) not in base]
+    if not new_cols:
+        return None
+    y = pd.Series(y_train)
+    if task == "regression":
+        yv = pd.to_numeric(y, errors="coerce").to_numpy(dtype="float64")
+    else:
+        yv = pd.factorize(y)[0].astype("float64")
+    n_predictive = sum(
+        _target_association(np.asarray(X_gen[c], dtype="float64"), yv, task)
+        >= EFFICIENCY_THRESHOLD
+        for c in new_cols
+    )
+    return float(n_predictive) / len(new_cols)
+
+
+def _subsample(X, y, max_rows: int, seed: int):
+    n = len(y)
+    if n <= max_rows:
+        return X, y
+    idx = np.random.RandomState(seed).choice(n, size=max_rows, replace=False)
+    X_sub = X.iloc[idx] if isinstance(X, pd.DataFrame) else X[idx]
+    y_sub = y.iloc[idx] if isinstance(y, pd.Series) else np.asarray(y)[idx]
+    return X_sub, y_sub
+
 
 def _clean_for_tree(X):
     """Generated features can contain +/-inf (e.g. 1/0 from OpenFE/autofeat);
@@ -48,6 +99,12 @@ def fit_and_score(family: str, task: str, X_train, y_train, X_test, y_test) -> d
     (binary or macro one-vs-rest); regression uses R2 (+ MAE as a secondary
     scale-aware metric).
     """
+    if family == "knn":
+        X_train, y_train = _subsample(X_train, y_train,
+                                      KNN_MAX_TRAIN_ROWS, KNN_SUBSAMPLE_SEED)
+        X_test, y_test = _subsample(X_test, y_test,
+                                    KNN_MAX_TEST_ROWS, KNN_SUBSAMPLE_SEED + 1)
+
     if family == "tree":
         import lightgbm as lgb
 

@@ -25,6 +25,7 @@ import warnings
 from afe.benchmark import DEFAULT_BUDGET_SECONDS, run_benchmark
 from afe.benchmark.models import MODEL_FAMILIES
 from afe.benchmark.registry import BENCHMARK
+from afe.methods import METHODS
 
 warnings.filterwarnings("ignore")
 
@@ -42,7 +43,7 @@ def main() -> int:
     parser.add_argument("--datasets", nargs="*", default=None,
                         help="benchmark keys to run (default: all 22, small-first)")
     parser.add_argument("--methods", nargs="*", default=["baseline"],
-                        choices=["baseline", "openfe", "featuretools", "autofeat"],
+                        choices=sorted(METHODS),
                         help="which AutoFE methods to benchmark")
     parser.add_argument("--models", nargs="*", default=list(MODEL_FAMILIES),
                         choices=list(MODEL_FAMILIES),

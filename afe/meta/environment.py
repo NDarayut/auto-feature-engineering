@@ -80,7 +80,10 @@ class FTGEnvironment:
         # *marginal* gain is a fair signal) while bounding cost by max_features,
         # not by the dataset's native width (algorithm_plan Sec. 3).
         if X.shape[1] > max_features:
-            X = X[:, _top_feature_columns(X, y, self.task, max_features)]
+            self.selected_columns = _top_feature_columns(X, y, self.task, max_features)
+            X = X[:, self.selected_columns]
+        else:
+            self.selected_columns = np.arange(X.shape[1])
         strat = y if (self.task != "regression" and _has_min_class(y)) else None
         self._tr, self._te, self._ytr, self._yte = train_test_split(
             X, y, test_size=0.33, random_state=seed, stratify=strat)

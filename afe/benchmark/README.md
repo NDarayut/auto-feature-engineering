@@ -43,15 +43,16 @@ At least one of `datasets=`/`custom_datasets=` is required. Each dataset
 gets a single fixed-seed 80/20 split (same protocol as the rest of
 `afe.benchmark`), reused identically across every method being compared.
 
-This is symmetric by design: baseline/OpenFE/Featuretools/Autofeat/MF-OpenFE
-are not privileged in any way here — to include one, import it and pass it
-in `methods=` exactly like your own algorithm:
+This is symmetric by design: baseline/OpenFE/CAFEM/Featuretools/Autofeat/
+MF-OpenFE are not privileged in any way here — to include one, import it and
+pass it in `methods=` exactly like your own algorithm (the built-in adapters
+are re-exported from `afe.benchmark` for convenience):
 
 ```python
-from afe.methods import OpenFEMethod, BaselineMethod
+from afe.benchmark import BaselineMethod, CAFEMMethod, OpenFEMethod
 from afe import MFOpenFE
 
-compare(methods=[my_method, BaselineMethod, OpenFEMethod, MFOpenFE],
+compare(methods=[my_method, BaselineMethod, OpenFEMethod, CAFEMMethod, MFOpenFE],
         datasets=["german-credit"])
 ```
 
