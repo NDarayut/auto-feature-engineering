@@ -150,3 +150,48 @@ def test_run_benchmark_is_resumable(tmp_path):
     n2, _ = benchmark.run_benchmark([_KEY], ["baseline"], budget_seconds=30,
                                     out_path=out_path)
     assert n2 == 0  # already-done pair skipped on resume
+
+
+# --- progress output + inline report generation -------------------------- #
+
+def test_report_written_inline_when_report_path_given(tmp_path):
+    out, report = tmp_path / "r.jsonl", tmp_path / "r.md"
+    benchmark.run_benchmark([_KEY], ["baseline"], budget_seconds=30,
+                            out_path=out, report_path=report, progress=False)
+    assert report.exists(), "report_path should be written by run_benchmark"
+    assert report.read_text().startswith("# Benchmark Report")
+
+
+def test_no_report_written_without_report_path(tmp_path):
+    out = tmp_path / "r.jsonl"
+    benchmark.run_benchmark([_KEY], ["baseline"], budget_seconds=30,
+                            out_path=out, progress=False)
+    assert list(tmp_path.glob("*.md")) == []
+
+
+def test_report_covers_resumed_rows_not_just_this_run(tmp_path):
+    """A resumed run's report must describe the whole results file."""
+    out, report = tmp_path / "r.jsonl", tmp_path / "r.md"
+    benchmark.run_benchmark([_KEY], ["baseline"], budget_seconds=30,
+                            out_path=out, progress=False)
+    n_first = sum(1 for _ in out.open())
+    # Second call: the pair is already done, so it produces no new rows --
+    # the report must still be built from the existing ones.
+    benchmark.run_benchmark([_KEY], ["baseline"], budget_seconds=30,
+                            out_path=out, report_path=report, progress=False)
+    assert sum(1 for _ in out.open()) == n_first
+    assert _KEY in report.read_text()
+
+
+def test_progress_lines_go_to_stderr_and_can_be_disabled(tmp_path, capsys):
+    benchmark.run_benchmark([_KEY], ["baseline"], budget_seconds=30,
+                            out_path=tmp_path / "a.jsonl", progress=True)
+    captured = capsys.readouterr()
+    assert _KEY in captured.err, "progress should go to stderr"
+    assert _KEY not in captured.out, "stdout must stay clean for piping"
+
+    benchmark.run_benchmark([_KEY], ["baseline"], budget_seconds=30,
+                            out_path=tmp_path / "b.jsonl", progress=False)
+    assert benchmark  # sanity
+    quiet = capsys.readouterr()
+    assert quiet.err == "", "progress=False should print nothing"

@@ -59,6 +59,8 @@ import pandas as pd
 from ..encoders import _split_columns
 from ..methods import (METHODS, isolated_cwd, method_task, prep_for_generation,
                        quiet_method_warnings, resolve_method)
+from .progress import ProgressReporter
+from .report import build_report, load_rows
 from .download import load
 from .models import (MODEL_FAMILIES, feature_efficiency, fit_and_score,
                      prepare_family_input)
@@ -321,6 +323,8 @@ def run_benchmark(
     fit_sample_rows: int | None = DEFAULT_FIT_SAMPLE_ROWS,
     transform_chunk_rows: int | None = DEFAULT_TRANSFORM_CHUNK_ROWS,
     max_mem_gb: float | None = DEFAULT_MAX_MEM_GB,
+    progress: bool = True,
+    report_path: str | Path | None = None,
 ) -> tuple[int, Path]:
     """Run every (dataset, method) pair sequentially, one dataset at a time.
 
@@ -331,16 +335,30 @@ def run_benchmark(
     ``fit_sample_rows``/``transform_chunk_rows``/``max_mem_gb`` are the
     generic, method-agnostic memory guards described in the module
     docstring -- see ``run_dataset``/``_run_method``/``_generation_worker``.
+
+    ``progress`` prints one line per completed (dataset, method) pair to
+    stderr. ``report_path`` writes a markdown report there when the run
+    finishes, built from every row in ``out_path`` -- including rows carried
+    over from an earlier resumed run, so the report always covers the whole
+    results file rather than just this invocation.
     """
+    keys, methods = list(keys), list(methods)
     out = Path(out_path) if out_path else RESULTS_DIR / "benchmark_results.jsonl"
     out.parent.mkdir(parents=True, exist_ok=True)
     done = _completed_pairs(out) if resume else set()
+    pending = [(k, m) for k in keys for m in methods if (k, m) not in done]
+    reporter = ProgressReporter(total=len(pending), enabled=progress)
+    reporter.start(methods, keys)
+
     n = 0
     with out.open("a") as f:
         for key in keys:
             pending_methods = [m for m in methods if (key, m) not in done]
             if not pending_methods:
                 continue
+            # One pair yields one row per model family; collect each pair's
+            # rows so the progress line can show all family scores together.
+            per_pair: dict[str, list[dict]] = {}
             for row in run_dataset(key, pending_methods, model_families,
                                    budget_seconds, use_cache,
                                    max_cols, fit_sample_rows, transform_chunk_rows,
@@ -348,4 +366,22 @@ def run_benchmark(
                 f.write(json.dumps(row, default=str) + "\n")
                 f.flush()
                 n += 1
+                per_pair.setdefault(row["method"], []).append(row)
+            for method in pending_methods:
+                rows = per_pair.get(method)
+                if not rows:
+                    continue
+                first = rows[0]
+                reporter.pair_done(
+                    key, method, first.get("status", "?"),
+                    gen_elapsed_s=first.get("gen_elapsed_s"),
+                    scores={r["model_family"]: r["value"] for r in rows
+                            if r.get("model_family") and r.get("value") is not None},
+                    error=first.get("error"))
+
+    report_out = Path(report_path) if report_path else None
+    if report_out:
+        report_out.parent.mkdir(parents=True, exist_ok=True)
+        report_out.write_text(build_report(load_rows(out)))
+    reporter.finish(n, out_path=out, report_path=report_out)
     return n, out

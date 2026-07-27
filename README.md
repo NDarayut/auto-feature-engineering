@@ -139,6 +139,15 @@ compare(methods=[BaselineMethod, openfe],
         budget_seconds=300,
         out_path="results/my_run.jsonl")
 
+# Write the markdown report inline, no separate report step.
+compare(methods=[BaselineMethod, openfe],
+        datasets=["german-credit"],
+        report_path="results/my_run.md")
+
+# Silence the per-pair progress lines.
+compare(methods=[BaselineMethod, openfe],
+        datasets=["german-credit"], progress=False)
+
 result = compare(methods=[BaselineMethod, openfe], datasets=["german-credit"])
 df = result.to_frame()      # raw rows as a pandas DataFrame
 ```
@@ -165,14 +174,39 @@ python -m scripts.run_benchmark \
 
 # All 22 datasets (smallest first), 900s budget, resumable if interrupted:
 python -m scripts.run_benchmark --methods baseline adapters:openfe --budget 900
+```
 
-# Turn the results into a markdown report:
-python -m scripts.report_benchmark results/my_run.jsonl --out report.md
+It reports progress as it goes and writes the markdown report itself:
+
+```
+benchmarking 2 method(s) on 2 dataset(s) -- 4 pairs
+[1/4] german-credit / baseline: ok in 0.0s -- knn 0.780  linear 0.815  tree 0.829
+[2/4] german-credit / adapters:openfe: ok in 2.4m -- knn 0.780  linear 0.821  tree 0.822
+[3/4] concrete-strength / baseline: ok in 0.0s -- knn 0.716  linear 0.647  tree 0.935
+[4/4] concrete-strength / adapters:openfe: ok in 42.6s -- knn 0.818  linear 0.789  tree 0.936
+done: 12 result rows in 3.3m -> results/my_run.jsonl
+report: results/my_run.md
+```
+
+Failures appear in the same stream (`TIMEOUT`, `OOM`, `CRASHED`, `ERROR`
+with the message), so a method failing everywhere is obvious immediately
+rather than at the end of a multi-hour sweep.
+
+The report lands next to the JSONL (`--report PATH` to place it elsewhere,
+`--no-report` to skip, `--quiet` to drop the progress lines).
+
+Progress goes to **stderr**, which matters more than it sounds: many AutoFE
+libraries print heavily to stdout — one OpenFE run here emitted 24 MB of
+LightGBM logging. Redirect stdout away and you get a clean progress feed:
+
+```bash
+python -m scripts.run_benchmark --methods baseline adapters:openfe > /dev/null
 ```
 
 Runs are **resumable**: (dataset, method) pairs already in `--out` are
-skipped on restart. Unlike `compare()`, the CLI applies memory and width
-guards by default — see [Parameters](#parameters).
+skipped on restart, and the report still covers the whole results file, not
+just the pairs this invocation ran. Unlike `compare()`, the CLI applies
+memory and width guards by default — see [Parameters](#parameters).
 
 ### 5. Plug in your own method
 
@@ -276,6 +310,9 @@ All flags of `python -m scripts.run_benchmark`:
 | `--fit-sample-rows` | `20000` | cap the row count a method's *fit* step sees to a random sample of this size (the full fold is still used for scoring — see `--transform-chunk-rows`); `0` disables |
 | `--transform-chunk-rows` | `20000` | apply a fitted method's *transform* in row chunks of this size instead of on the whole fold at once, bounding peak memory while building the final feature matrix; `0` disables |
 | `--max-mem-gb` | `16.0` | hard memory ceiling (via `RLIMIT_AS`) for each method's generation subprocess, as a safety net for whatever the caps above don't catch — an over-limit run is killed and recorded as `status="oom"` rather than risking the host; `0` disables |
+| `--report` | `--out` with a `.md` suffix | where to write the markdown report generated when the run finishes |
+| `--no-report` | off | skip report generation |
+| `--quiet` | off | suppress the per-(dataset, method) progress lines |
 
 The last four flags exist because a method's internal algorithm (candidate
 search, RL rollout, DFS, …) can scale combinatorially with a dataset's row
@@ -379,6 +416,10 @@ df.groupby(["method", "model_family"])["value"].mean()
 ```
 
 ### Generating a markdown report
+
+Both entry points write one for you — the CLI by default (next to `--out`),
+`compare()` when given `report_path=`. To regenerate from an existing
+results file, or to report on a run someone else produced:
 
 ```bash
 python -m scripts.report_benchmark results/my_run.jsonl                        # to stdout

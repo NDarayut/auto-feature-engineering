@@ -40,6 +40,8 @@ import pandas as pd
 from ..encoders import _split_columns
 from ..methods import AutoFEMethod, prep_for_generation
 from ..methods import isolated_cwd, method_task, quiet_method_warnings
+from .progress import ProgressReporter
+from .report import build_report
 from ..task import infer_task
 from .benchmark import _completed_pairs
 from .download import load
@@ -296,6 +298,8 @@ def compare(
     out_path: str | Path | None = None,
     resume: bool = True,
     use_cache: bool = True,
+    progress: bool = True,
+    report_path: str | Path | None = None,
 ) -> CompareResult:
     """Benchmark ``methods`` against each other on ``datasets``/``custom_datasets``.
 
@@ -317,6 +321,10 @@ def compare(
     ``out_path``, if given, persists rows as JSONL and makes the run
     resumable (skips ``(dataset, method)`` pairs already present, same
     contract as ``afe.benchmark.run_benchmark``).
+
+    ``progress`` prints one line per completed (dataset, method) pair to
+    stderr -- stdout stays clean for the result table. ``report_path``
+    writes a markdown report there when the run finishes.
     """
     if not datasets and not custom_datasets:
         raise ValueError("pass datasets=[...] and/or custom_datasets={...}")
@@ -335,6 +343,12 @@ def compare(
         task_override = (custom_tasks or {}).get(name)
         dataset_specs.append((name, *_prepare_custom(X, y, task_override)))
 
+    n_pending = sum(1 for name, _, _, _, _ in dataset_specs
+                    for m, _ in methods_resolved if (name, m) not in done)
+    reporter = ProgressReporter(total=n_pending, enabled=progress)
+    reporter.start([m for m, _ in methods_resolved],
+                   [name for name, *_ in dataset_specs])
+
     rows: list[dict] = []
     fh = out.open("a") if out else None
     try:
@@ -342,16 +356,37 @@ def compare(
             pending = [(n, m) for n, m in methods_resolved if (dataset_name, n) not in done]
             if not pending:
                 continue
+            # One pair yields one row per model family; group them so the
+            # progress line can show every family's score on one line.
+            per_pair: dict[str, list[dict]] = {}
             for row in _run_dataset(dataset_name, X_full, y_full, task, cat_cols,
                                     pending, model_families, budget_seconds):
                 rows.append(row)
+                per_pair.setdefault(row["method"], []).append(row)
                 if fh:
                     fh.write(json.dumps(row, default=str) + "\n")
                     fh.flush()
+            for name, _ in pending:
+                pair_rows = per_pair.get(name)
+                if not pair_rows:
+                    continue
+                first = pair_rows[0]
+                reporter.pair_done(
+                    dataset_name, name, first.get("status", "?"),
+                    gen_elapsed_s=first.get("gen_elapsed_s"),
+                    scores={r["model_family"]: r["value"] for r in pair_rows
+                            if r.get("model_family") and r.get("value") is not None},
+                    error=first.get("error"))
     finally:
         if fh:
             fh.close()
 
     if out and out.exists():
         rows = _load_all_rows(out)
+
+    report_out = Path(report_path) if report_path else None
+    if report_out:
+        report_out.parent.mkdir(parents=True, exist_ok=True)
+        report_out.write_text(build_report(rows))
+    reporter.finish(len(rows), out_path=out, report_path=report_out)
     return CompareResult(rows=rows)

@@ -25,10 +25,12 @@ from __future__ import annotations
 
 import argparse
 import warnings
+from pathlib import Path
 
 from afe.benchmark import (DEFAULT_BUDGET_SECONDS, DEFAULT_FIT_SAMPLE_ROWS,
                            DEFAULT_MAX_COLS, DEFAULT_MAX_MEM_GB,
                            DEFAULT_TRANSFORM_CHUNK_ROWS, run_benchmark)
+from afe.benchmark.benchmark import RESULTS_DIR
 from afe.benchmark.models import MODEL_FAMILIES
 from afe.benchmark.registry import BENCHMARK
 from afe.methods import METHODS
@@ -74,17 +76,29 @@ def main() -> int:
     parser.add_argument("--max-mem-gb", type=float, default=DEFAULT_MAX_MEM_GB,
                         help="hard RLIMIT_AS memory cap (GB) for each method's generation "
                              "subprocess, as a safety net (0 disables)")
+    parser.add_argument("--report", default=None, metavar="PATH",
+                        help="markdown report path (default: --out with a .md suffix)")
+    parser.add_argument("--no-report", action="store_true",
+                        help="skip writing the markdown report")
+    parser.add_argument("--quiet", action="store_true",
+                        help="suppress per-(dataset, method) progress lines")
     args = parser.parse_args()
 
     keys = args.datasets or _default_dataset_order()
+    # Resolve the report path against the *actual* results file, so the
+    # default tracks --out (and its default) instead of guessing.
+    out_default = Path(args.out) if args.out else RESULTS_DIR / "benchmark_results.jsonl"
+    report_path = None if args.no_report else (args.report or out_default.with_suffix(".md"))
+
     n, out_path = run_benchmark(
         keys, args.methods, args.models, budget_seconds=args.budget, out_path=args.out,
         resume=not args.no_resume,
         max_cols=args.max_cols or None,
         fit_sample_rows=args.fit_sample_rows or None,
         transform_chunk_rows=args.transform_chunk_rows or None,
-        max_mem_gb=args.max_mem_gb or None)
-    print(f"wrote {n} result rows to {out_path}")
+        max_mem_gb=args.max_mem_gb or None,
+        progress=not args.quiet,
+        report_path=report_path)
     return 0
 
 
