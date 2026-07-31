@@ -5,8 +5,8 @@
 
 # Core data handling
 pandas>=2.0
-numpy>=1.24
-scikit-learn>=1.3        # sklearn built-ins + TargetEncoder + fetch_openml
+numpy>=1.19.5
+scikit-learn<1.6        # sklearn built-ins + TargetEncoder + fetch_openml
 
 # Tree model in the 3-model scoring panel
 lightgbm>=4.0
